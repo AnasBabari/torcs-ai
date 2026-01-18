@@ -105,7 +105,7 @@ class Client():
             sys.exit(-1)
         self.so.settimeout(1)
 
-        n_fail = 5
+        n_fail = 10  # Increased retry attempts
         while True:
             a= "-45 -19 -12 -7 -4 -2.5 -1.7 -1 -.5 0 .5 1 1.7 2.5 4 7 12 19 45"
 
@@ -122,31 +122,19 @@ class Client():
             except socket.error as emsg:
                 print("Waiting for server on %d............" % self.port)
                 print("Count Down : " + str(n_fail))
-                if n_fail < 0:
-                    print("relaunch torcs")
-                    # Windows-specific TORCS restart
-                    import platform
-                    if platform.system() == 'Windows':
-                        # Kill any existing TORCS processes
-                        os.system('taskkill /F /IM wtorcs.exe 2>nul')
-                        time.sleep(1.0)
-                        # Start TORCS with quickrace configuration
-                        torcs_path = r'C:\torcs\torcs\wtorcs.exe'
-                        if os.path.exists(torcs_path):
-                            os.system(f'start "" "{torcs_path}" -r quickrace')
-                        else:
-                            print(f"Warning: TORCS not found at {torcs_path}")
-                    else:
-                        # Original Linux commands
-                        os.system('pkill torcs')
-                        time.sleep(1.0)
-                        if self.vision is False:
-                            os.system('torcs -nofuel -nodamage -nolaptime &')
-                        else:
-                            os.system('torcs -nofuel -nodamage -nolaptime -vision &')
 
-                    time.sleep(2.0)  # Give TORCS more time to start on Windows
-                    n_fail = 5
+                # Only try to start TORCS if we're sure it's not running
+                # and we've exhausted retries
+                if n_fail < 0:
+                    print("❌ Cannot connect to TORCS server.")
+                    print("🔧 Please ensure TORCS is running with:")
+                    print("   cd C:\\torcs\\torcs")
+                    print("   set SDL_VIDEODRIVER=windib")
+                    print('   wtorcs.exe -r config\\raceman\\quickrace.xml')
+                    print("   Wait for 'Waiting for request on port 3001' message")
+                    print("   Then run this script again.")
+                    sys.exit(-1)
+
                 n_fail -= 1
 
             identify = '***identified***'
@@ -2593,17 +2581,33 @@ def start_torcs_server():
     import platform
     import subprocess
 
-    print("🚀 Starting TORCS server automatically...")
+    print("🚀 Checking TORCS server status...")
 
     if platform.system() == 'Windows':
+        # First check if TORCS is already running
+        import psutil
+        torcs_running = False
+        try:
+            for proc in psutil.process_iter(['pid', 'name']):
+                if proc.info['name'] and 'wtorcs.exe' in proc.info['name'].lower():
+                    torcs_running = True
+                    print("✅ TORCS is already running")
+                    return True
+        except:
+            pass  # psutil might not be available, continue with startup
+
+        if torcs_running:
+            return True
+
         torcs_path = r'C:\torcs\torcs\wtorcs.exe'
         if os.path.exists(torcs_path):
             try:
+                print("🚀 Starting TORCS server...")
                 # Start TORCS in background
                 subprocess.Popen([torcs_path, '-r', 'quickrace'],
                                creationflags=subprocess.CREATE_NO_WINDOW)
                 print("✅ TORCS server started successfully")
-                time.sleep(3)  # Give TORCS time to start
+                time.sleep(5)  # Give TORCS more time to start
                 return True
             except Exception as e:
                 print(f"❌ Failed to start TORCS: {e}")
