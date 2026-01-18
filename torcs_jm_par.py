@@ -221,8 +221,9 @@ class Client():
                 self.shutdown()
                 return
             elif '***restart***' in sockdata:
-                print("Server has restarted the race on %d." % self.port)
-                self.shutdown()
+                print("Server has restarted the race on %d. Reconnecting for new race..." % self.port)
+                # Instead of shutting down, reconnect for the new race
+                self.reconnect_for_new_race()
                 return
             elif not sockdata: # Empty?
                 continue       # Try again.
@@ -242,6 +243,27 @@ class Client():
             print("Error sending to server: %s Message %s" % (emsg[1],str(emsg[0])))
             sys.exit(-1)
         if self.debug: print(self.R.fancyout())
+
+    def reconnect_for_new_race(self):
+        """Reconnect to server for a new race instead of shutting down completely."""
+        if self.so:
+            try:
+                self.so.close()
+            except:
+                pass
+            self.so = None
+
+        print("🔄 Reconnecting to TORCS server for new race...")
+        time.sleep(1.0)  # Brief pause before reconnecting
+
+        # Re-establish connection
+        self.setup_connection()
+
+        # Reset race-specific state
+        self.S = ServerState()
+        self.R = DriverAction()
+
+        print("✅ Successfully reconnected for new race!")
 
     def shutdown(self):
         if not self.so: return
@@ -2395,6 +2417,17 @@ def automated_training_pipeline(num_races=10, max_steps_per_race=5000, save_inte
             race_experiences = 0
             for step in range(C.maxSteps, 0, -1):
                 C.get_servers_input()
+
+                # Check if connection is still active after get_servers_input
+                if not C.so:
+                    print("⚠️  Connection lost during race, attempting to reconnect...")
+                    try:
+                        C.setup_connection()
+                        print("✅ Reconnected successfully, continuing race...")
+                    except Exception as e:
+                        print(f"❌ Failed to reconnect: {e}")
+                        break
+
                 drive_modular(C)
                 C.respond_to_server()
                 
@@ -2500,6 +2533,17 @@ def continuous_learning_mode(max_races=50, performance_threshold=0.5):
             
             for step in range(C.maxSteps, 0, -1):
                 C.get_servers_input()
+
+                # Check if connection is still active after get_servers_input
+                if not C.so:
+                    print("⚠️  Connection lost during continuous learning, attempting to reconnect...")
+                    try:
+                        C.setup_connection()
+                        print("✅ Reconnected successfully, continuing training...")
+                    except Exception as e:
+                        print(f"❌ Failed to reconnect: {e}")
+                        break
+
                 drive_modular(C)
                 C.respond_to_server()
                 
@@ -2904,13 +2948,24 @@ if __name__ == "__main__":
         C = Client(p=3001)
         for step in range(C.maxSteps, 0, -1):
             C.get_servers_input()
+
+            # Check if connection is still active after get_servers_input
+            if not C.so:
+                print("⚠️  Connection lost, attempting to reconnect...")
+                try:
+                    C.setup_connection()
+                    print("✅ Reconnected successfully, continuing race...")
+                except Exception as e:
+                    print(f"❌ Failed to reconnect: {e}")
+                    break
+
             drive_modular(C)
             C.respond_to_server()
-            
+
             # Periodic analysis
             if step % 1000 == 0:
                 print(f"Step {C.maxSteps - step}/{C.maxSteps} - AI learning and adapting...")
-                
+
         C.shutdown()
         
         # Final analysis
