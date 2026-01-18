@@ -73,8 +73,9 @@ def bargraph(x,mn,mx,w,c='X'):
     return '[%s]' % (nnc+npc+ppc+pnc)
 
 class Client():
-    def __init__(self,H=None,p=None,i=None,e=None,t=None,s=None,d=None,m=None,vision=False):
+    def __init__(self,H=None,p=None,i=None,e=None,t=None,s=None,d=None,m=None,vision=False,auto_start=False):
         self.vision = vision
+        self.auto_start = auto_start
 
         self.host= 'localhost'
         self.port= 3001
@@ -105,7 +106,16 @@ class Client():
             sys.exit(-1)
         self.so.settimeout(1)
 
-        n_fail = 10  # Increased retry attempts
+        print(f"🔌 Attempting to connect to TORCS on {self.host}:{self.port}")
+
+        # First check if TORCS process is running
+        torcs_running = self._check_torcs_process()
+        if torcs_running:
+            print("✅ TORCS process detected")
+        else:
+            print("⚠️  TORCS process not detected - please ensure TORCS is running")
+
+        n_fail = 15  # Increased retry attempts for better reliability
         while True:
             a= "-45 -19 -12 -7 -4 -2.5 -1.7 -1 -.5 0 .5 1 1.7 2.5 4 7 12 19 45"
 
@@ -113,34 +123,102 @@ class Client():
 
             try:
                 self.so.sendto(initmsg.encode(), (self.host, self.port))
+                print(f"📤 Sent connection request to {self.host}:{self.port}")
             except socket.error as emsg:
+                print(f"❌ Socket error sending to {self.host}:{self.port}: {emsg}")
                 sys.exit(-1)
+
             sockdata= str()
             try:
                 sockdata,addr= self.so.recvfrom(data_size)
                 sockdata = sockdata.decode('utf-8')
+                print(f"📥 Received response from {addr}")
+            except socket.timeout:
+                print(f"⏳ Timeout waiting for response on port {self.port} (attempt {16-n_fail}/15)")
+                if n_fail <= 5:
+                    print("💡 Tip: Make sure TORCS shows 'Waiting for request on port 3001'")
             except socket.error as emsg:
-                print("Waiting for server on %d............" % self.port)
-                print("Count Down : " + str(n_fail))
+                print(f"❌ Socket error receiving on port {self.port}: {emsg}")
 
-                # Only try to start TORCS if we're sure it's not running
-                # and we've exhausted retries
-                if n_fail < 0:
-                    print("❌ Cannot connect to TORCS server.")
-                    print("🔧 Please ensure TORCS is running with:")
+            # Check for successful identification
+            identify = '***identified***'
+            if identify in sockdata:
+                print("✅ Client connected successfully!")
+                break
+
+            # If we've exhausted retries, provide helpful troubleshooting
+            if n_fail < 0:
+                if self.auto_start:
+                    print("🔄 Auto-start enabled, attempting to start TORCS...")
+                    if self._try_start_torcs():
+                        print("✅ TORCS started, retrying connection...")
+                        n_fail = 10  # Reset retry counter
+                        time.sleep(3)  # Give TORCS time to start
+                        continue
+                    else:
+                        print("❌ Failed to auto-start TORCS")
+                else:
+                    print("\n" + "="*60)
+                    print("❌ CANNOT CONNECT TO TORCS SERVER")
+                    print("="*60)
+                    print("🔍 TROUBLESHOOTING STEPS:")
+                    print("1. Ensure TORCS is running:")
                     print("   cd C:\\torcs\\torcs")
                     print("   set SDL_VIDEODRIVER=windib")
                     print('   wtorcs.exe -r config\\raceman\\quickrace.xml')
-                    print("   Wait for 'Waiting for request on port 3001' message")
-                    print("   Then run this script again.")
+                    print("")
+                    print("2. Wait for TORCS to show: 'Waiting for request on port 3001'")
+                    print("")
+                    print("3. If TORCS crashes immediately, try:")
+                    print("   - Run Command Prompt as Administrator")
+                    print("   - Ensure no other TORCS instances are running")
+                    print("   - Check that the quickrace.xml file exists")
+                    print("")
+                    print("4. Test connection manually:")
+                    print("   - Open another terminal")
+                    print("   - Run: telnet localhost 3001")
+                    print("   - Should connect (Ctrl+C to exit)")
+                    print("")
+                    print("5. Alternative: Use training mode for auto-start:")
+                    print("   python torcs_jm_par.py train")
+                    print("="*60)
                     sys.exit(-1)
 
-                n_fail -= 1
+            n_fail -= 1
+            time.sleep(0.5)  # Small delay between retries
 
-            identify = '***identified***'
-            if identify in sockdata:
-                print("Client connected on %d.............." % self.port)
-                break
+    def _try_start_torcs(self):
+        """Try to start TORCS server automatically"""
+        try:
+            import platform
+            import subprocess
+
+            if platform.system() == 'Windows':
+                torcs_path = r'C:\torcs\torcs\wtorcs.exe'
+                if os.path.exists(torcs_path):
+                    # Kill any existing TORCS processes first
+                    try:
+                        import psutil
+                        killed = False
+                        for proc in psutil.process_iter(['pid', 'name']):
+                            if proc.info['name'] and 'wtorcs.exe' in proc.info['name'].lower():
+                                proc.kill()
+                                killed = True
+                        if killed:
+                            time.sleep(1)  # Wait for process to terminate
+                    except:
+                        # Fallback to taskkill
+                        os.system('taskkill /F /IM wtorcs.exe 2>nul')
+                        time.sleep(1)
+
+                    # Start TORCS
+                    subprocess.Popen([torcs_path, '-r', 'quickrace'],
+                                   creationflags=subprocess.CREATE_NO_WINDOW)
+                    return True
+            return False
+        except Exception as e:
+            print(f"Error auto-starting TORCS: {e}")
+            return False
 
     def parse_the_command_line(self):
         # Skip command line parsing for training modes
@@ -2909,8 +2987,9 @@ if __name__ == "__main__":
             print("   1. analyze     - Analyze current ML models")
             print("   2. train N     - Run automated training pipeline (N races)")
             print("   3. continuous N T - Continuous learning until performance T")
-            print("   4. demo        - Show this demo")
-            print("   5. help        - Show usage instructions")
+            print("   4. autostart   - Run single race with TORCS auto-start")
+            print("   5. demo        - Show this demo")
+            print("   6. help        - Show usage instructions")
             print()
             print("📊 Current Status:")
             print(f"   • ML Models: {'LOADED' if ml_racing_ai.is_trained else 'NOT TRAINED'}")
@@ -2926,7 +3005,8 @@ if __name__ == "__main__":
         elif sys.argv[1] == 'help':
             print("🏎️  TORCS ML Racing AI - Usage:")
             print("="*50)
-            print("python torcs_jm_par.py              # Run single race")
+            print("python torcs_jm_par.py              # Run single race (manual TORCS start)")
+            print("python torcs_jm_par.py autostart    # Run single race (auto-start TORCS)")
             print("python torcs_jm_par.py analyze      # Analyze current models")
             print("python torcs_jm_par.py train [N]    # Automated training (N races)")
             print("python torcs_jm_par.py continuous [N] [T]  # Continuous learning")
@@ -2941,40 +3021,40 @@ if __name__ == "__main__":
         else:
             print("❌ Unknown command. Use 'python torcs_jm_par.py demo' for options.")
             
-    else:
-        # Run racing mode (default)
-        print("🏎️  Starting Machine Learning Racing AI...")
-        print("🤖 ML Models:", "LOADED" if ml_racing_ai.is_trained else "TRAINING")
-        print("📊 Data collection and visualization: ENABLED")
-        print("🎯 Target: Ultimate racing performance with continuous learning")
-        print("="*60)
-        
-        C = Client(p=3001)
-        for step in range(C.maxSteps, 0, -1):
-            C.get_servers_input()
+elif sys.argv[1] == 'autostart':
+            # Auto-start mode - run single race with TORCS auto-start
+            print("🚀 Starting TORCS ML Racing AI with auto-start...")
+            print("🤖 ML Models:", "LOADED" if ml_racing_ai.is_trained else "TRAINING")
+            print("📊 Data collection and visualization: ENABLED")
+            print("🎯 Target: Ultimate racing performance with continuous learning")
+            print("="*60)
+            
+            C = Client(p=3001, auto_start=True)
+            for step in range(C.maxSteps, 0, -1):
+                C.get_servers_input()
 
-            # Check if connection is still active after get_servers_input
-            if not C.so:
-                print("⚠️  Connection lost, attempting to reconnect...")
-                try:
-                    C.setup_connection()
-                    print("✅ Reconnected successfully, continuing race...")
-                except Exception as e:
-                    print(f"❌ Failed to reconnect: {e}")
-                    break
+                # Check if connection is still active after get_servers_input
+                if not C.so:
+                    print("⚠️  Connection lost, attempting to reconnect...")
+                    try:
+                        C.setup_connection()
+                        print("✅ Reconnected successfully, continuing race...")
+                    except Exception as e:
+                        print(f"❌ Failed to reconnect: {e}")
+                        break
 
-            drive_modular(C)
-            C.respond_to_server()
+                drive_modular(C)
+                C.respond_to_server()
 
-            # Periodic analysis
-            if step % 1000 == 0:
-                print(f"Step {C.maxSteps - step}/{C.maxSteps} - AI learning and adapting...")
+                # Periodic analysis
+                if step % 1000 == 0:
+                    print(f"Step {C.maxSteps - step}/{C.maxSteps} - AI learning and adapting...")
 
-        C.shutdown()
-        
-        # Final analysis
-        print("\n" + "="*60)
-        print("🏁 RACE COMPLETE - Generating final analysis...")
-        analyze_ml_models()
-        generate_racing_insights()
-        print("="*60)
+            C.shutdown()
+            
+            # Final analysis
+            print("\n" + "="*60)
+            print("🏁 RACE COMPLETE - Generating final analysis...")
+            analyze_ml_models()
+            generate_racing_insights()
+            print("="*60)
