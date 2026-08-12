@@ -62,7 +62,7 @@ ob = env.reset(relaunch=True)  # with torcs relaunch (avoid memory leak bug in t
 # Generate an agent
 from sample_agent import Agent
 agent = Agent(1)  # steering only
-action = agent.act(ob, reward, done, vision=True)
+action = agent.act(ob, reward=0.0, done=False, vision_on=True)
 
 # single step
 ob, reward, done, _ = env.step(action)
@@ -70,6 +70,10 @@ ob, reward, done, _ = env.step(action)
 # shut down torcs
 env.end()
 ```
+
+When `gear_change=True`, the action layout is `[steer, gear]` without throttle
+and `[steer, throttle, gear]` with throttle. Gear values use the simulator's
+1–6 range; steering and throttle remain continuous controls.
 
 # 
 
