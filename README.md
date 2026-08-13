@@ -129,6 +129,10 @@ python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --episodes 3
 # Track-specific runs use only the doctor-approved allowlist:
 python scripts\train_native_agent.py --track road/alpine-1 --timesteps 100000
 python scripts\benchmark_native.py --model runs\ppo_native.zip --track road/ruudskogen --episodes 3 --max-steps 10000
+# Matrix mode keeps one isolated runtime per track:
+python scripts\benchmark_native.py --model runs\ppo_native.zip `
+  --track road/alpine-1 --track road/forza --track oval/michigan `
+  --episodes 3 --max-steps 10000
 ```
 
 These commands require the `rl` extra, stage a private runtime copy, and close
@@ -140,6 +144,8 @@ Teacher guidance is an explicit training-only reward term: it rewards matching
 the deterministic telemetry-driven tactical controller and records its
 coefficient in the run manifest. Benchmark environments disable guidance, so
 reported learned-policy results remain independent of the teacher reward.
+Repeated `--track` arguments produce a matrix artifact while retaining the
+single-track fields for existing consumers.
 
 ## Evaluation policy
 
