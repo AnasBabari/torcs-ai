@@ -151,6 +151,14 @@ reported learned-policy results remain independent of the teacher reward.
 Repeated `--track` arguments produce a matrix artifact while retaining the
 single-track fields for existing consumers.
 
+The low-level controller uses an explicit, manifest-recorded driving profile.
+The generic forward-ray speed envelope is used for Alpine and Michigan. Forza
+uses a calibrated short-horizon hairpin brake floor (`speed_limit_scale=0.72`)
+because its forward rays collapse before a tight corner; this profile is
+applied consistently to the teacher, actuator controller, and benchmark
+environment. Unknown tracks keep the generic profile and must be revalidated
+before being used for competitive claims.
+
 ## Evaluation policy
 
 Racing policies are not scored by classification accuracy. The benchmark

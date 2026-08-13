@@ -13,8 +13,18 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .controllers import expert_tactical_action
-from .envs import MultiTrackRacingEnv, RacingEnv, ScrTransportConfig, TorcsScrTransport
+from .controllers import (
+    expert_tactical_action,
+    track_sharp_turn_braking,
+    track_speed_limit_scale,
+)
+from .envs import (
+    MultiTrackRacingEnv,
+    RacingEnv,
+    ScrTransportConfig,
+    TorcsScrTransport,
+    default_low_level_controller,
+)
 from .runtime import (
     SessionConfig,
     TorcsInstallation,
@@ -44,6 +54,33 @@ def build_run_manifest(
         raise ValueError("role cannot be empty and max_steps must be positive")
     if not 0.0 <= teacher_guidance <= 1.0:
         raise ValueError("teacher_guidance must be within [0, 1]")
+    profile_tracks: list[str | None]
+    if track == "matrix":
+        profile_tracks = []
+        source = training.get("tracks") if isinstance(training, dict) else None
+        if isinstance(source, (list, tuple)):
+            profile_tracks.extend(
+                item if item is None or isinstance(item, str) else str(item)
+                for item in source
+            )
+        if not profile_tracks and isinstance(results, dict):
+            for result in results.values():
+                if isinstance(result, dict):
+                    value = result.get("track")
+                    if value is None or isinstance(value, str):
+                        profile_tracks.append(value)
+        profile_tracks = list(dict.fromkeys(profile_tracks))
+        if not profile_tracks:
+            profile_tracks = [None]
+    else:
+        profile_tracks = [track]
+    driving_profiles = {
+        str(item or "default"): {
+            "speed_limit_scale": track_speed_limit_scale(item),
+            "sharp_turn_braking": track_sharp_turn_braking(item),
+        }
+        for item in profile_tracks
+    }
     manifest = inspect_installation(TorcsInstallation(torcs_home)).to_dict()
     dependency_versions: dict[str, str] = {}
     for package in ("numpy", "torch", "gymnasium", "stable-baselines3"):
@@ -68,6 +105,7 @@ def build_run_manifest(
             "track": track,
             "max_steps": max_steps,
             "teacher_guidance": teacher_guidance,
+            "driving_profiles": driving_profiles,
         },
     }
     if seed is not None:
@@ -122,10 +160,22 @@ def build_native_env(
         session,
         config=ScrTransportConfig(port=port, max_steps=max_steps),
     )
+    speed_limit_scale = track_speed_limit_scale(track)
+    sharp_turn_braking = track_sharp_turn_braking(track)
+    from functools import partial
+
+    controller = partial(
+        default_low_level_controller,
+        speed_limit_scale=speed_limit_scale,
+        sharp_turn_braking=sharp_turn_braking,
+    )
     return RacingEnv(
         transport,
         max_steps=max_steps,
+        controller=controller,
         teacher_guidance=teacher_guidance,
+        speed_limit_scale=speed_limit_scale,
+        sharp_turn_braking=sharp_turn_braking,
     )
 
 
@@ -282,6 +332,10 @@ def evaluate_expert(env: RacingEnv, *, episodes: int = 3) -> list[dict[str, Any]
             sensors = getattr(env, "_sensors", None)
             if sensors is None:
                 raise RuntimeError("expert policy requires an active environment")
-            return expert_tactical_action(sensors), None
+            return expert_tactical_action(
+                sensors,
+                speed_limit_scale=getattr(env, "speed_limit_scale", 1.0),
+                sharp_turn_braking=getattr(env, "sharp_turn_braking", False),
+            ), None
 
     return evaluate_policy(env, _ExpertPolicy(), episodes=episodes)

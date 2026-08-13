@@ -1,6 +1,12 @@
 """Deterministic expert baseline tests."""
 
-from torcs_ai.controllers import TacticalAction, expert_tactical_action, track_speed_limit
+from torcs_ai.controllers import (
+    TacticalAction,
+    expert_tactical_action,
+    track_sharp_turn_braking,
+    track_speed_limit,
+    track_speed_limit_scale,
+)
 
 
 def _sensors(**overrides):
@@ -44,3 +50,12 @@ def test_expert_brakes_when_forward_track_distance_is_short() -> None:
         TacticalAction.CENTER_BRAKE,
         TacticalAction.RIGHT_BRAKE,
     )
+
+
+def test_forza_profile_uses_short_horizon_braking_without_changing_default() -> None:
+    sensors = _sensors(track=[12.0] * 19)
+    assert track_speed_limit(sensors) == 110.0
+    assert track_speed_limit(sensors, sharp_turn_braking=True) == 60.0
+    assert track_speed_limit_scale("road\\forza") == 0.72
+    assert track_sharp_turn_braking("road/forza")
+    assert not track_sharp_turn_braking("road/alpine-1")

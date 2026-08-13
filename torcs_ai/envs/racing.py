@@ -41,7 +41,11 @@ def _clip(value: float, low: float, high: float) -> float:
 
 
 def default_low_level_controller(
-    intent: TacticalIntent, sensors: Mapping[str, Any]
+    intent: TacticalIntent,
+    sensors: Mapping[str, Any],
+    *,
+    speed_limit_scale: float = 1.0,
+    sharp_turn_braking: bool = False,
 ) -> dict[str, float]:
     """Convert a tactical intent into smooth bounded actuator targets."""
 
@@ -65,7 +69,14 @@ def default_low_level_controller(
         curvature = 0.0
     target_speed = 300.0 * intent.speed_fraction * (1.0 - 0.55 * curvature)
     target_speed *= 1.0 - min(abs(heading_error), 1.0) * 0.35
-    target_speed = min(target_speed, track_speed_limit(sensors))
+    target_speed = min(
+        target_speed,
+        track_speed_limit(
+            sensors,
+            speed_limit_scale=speed_limit_scale,
+            sharp_turn_braking=sharp_turn_braking,
+        ),
+    )
     if speed > target_speed + 10.0:
         accel, brake = 0.0, _clip((speed - target_speed) / 60.0, 0.0, 1.0)
     else:
@@ -104,6 +115,8 @@ if gym is not None:
             safety_shield: bool = True,
             slew_rates: Optional[Mapping[str, float]] = None,
             teacher_guidance: float = 0.0,
+            speed_limit_scale: float = 1.0,
+            sharp_turn_braking: bool = False,
         ) -> None:
             if max_steps < 1:
                 raise ValueError("max_steps must be positive")
@@ -115,6 +128,10 @@ if gym is not None:
             self.safety_shield = safety_shield
             self.slew_rates = dict(slew_rates or DEFAULT_SLEW_RATES)
             self.teacher_guidance = float(teacher_guidance)
+            if not np.isfinite(speed_limit_scale) or not 0.25 <= speed_limit_scale <= 1.5:
+                raise ValueError("speed_limit_scale must be finite and within [0.25, 1.5]")
+            self.speed_limit_scale = float(speed_limit_scale)
+            self.sharp_turn_braking = bool(sharp_turn_braking)
             self.observation_space = spaces.Box(
                 low=-1.0,
                 high=1.0,
@@ -185,7 +202,11 @@ if gym is not None:
             self._sensors = next_sensors
             self._step_count += 1
             reward, components = self._reward(previous, next_sensors, controls)
-            teacher_action = expert_tactical_action(previous)
+            teacher_action = expert_tactical_action(
+                previous,
+                speed_limit_scale=self.speed_limit_scale,
+                sharp_turn_braking=self.sharp_turn_braking,
+            )
             teacher_term = 0.0
             if self.teacher_guidance:
                 teacher_term = self.teacher_guidance * (
@@ -203,6 +224,8 @@ if gym is not None:
                 "tactical_action": intent.action_id,
                 "teacher_action": teacher_action,
                 "teacher_guidance": self.teacher_guidance,
+                "speed_limit_scale": self.speed_limit_scale,
+                "sharp_turn_braking": self.sharp_turn_braking,
                 "controls": controls,
                 "policy_controls": policy_controls,
                 "slew_limited": slew_limited,
