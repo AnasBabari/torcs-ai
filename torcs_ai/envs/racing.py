@@ -14,7 +14,13 @@ except ImportError:  # pragma: no cover - exercised only without the RL extra
     gym = None  # type: ignore[assignment]
     spaces = None  # type: ignore[assignment]
 
-from ..controllers import TacticalIntent, apply_safety_shield, decode_tactical_action
+from ..controllers import (
+    DEFAULT_SLEW_RATES,
+    TacticalIntent,
+    apply_safety_shield,
+    apply_slew_limiter,
+    decode_tactical_action,
+)
 from .telemetry import OBSERVATION_SIZE, TelemetryObservationEncoder, TelemetryValidationError
 
 
@@ -90,6 +96,7 @@ if gym is not None:
             track_length: float = 10_000.0,
             controller: Callable[[TacticalIntent, Mapping[str, Any]], Mapping[str, float]] = default_low_level_controller,
             safety_shield: bool = True,
+            slew_rates: Optional[Mapping[str, float]] = None,
         ) -> None:
             if max_steps < 1:
                 raise ValueError("max_steps must be positive")
@@ -97,6 +104,7 @@ if gym is not None:
             self.max_steps = max_steps
             self.controller = controller
             self.safety_shield = safety_shield
+            self.slew_rates = dict(slew_rates or DEFAULT_SLEW_RATES)
             self.observation_space = spaces.Box(
                 low=-1.0,
                 high=1.0,
@@ -120,6 +128,12 @@ if gym is not None:
             self.encoder.previous_sensors = None
             self.encoder.previous_controls = (0.0, 0.0, 0.0)
             self._sensors = dict(sensors)
+            self._previous_controls = {
+                "steer": 0.0,
+                "accel": 0.0,
+                "brake": 0.0,
+                "gear": float(np.clip(self._sensors.get("gear", 1.0), 1.0, 6.0)),
+            }
             self._step_count = 0
             try:
                 observation = self.encoder.encode(self._sensors)
@@ -132,11 +146,17 @@ if gym is not None:
                 raise RuntimeError("reset must be called before step")
             intent = decode_tactical_action(action)
             controls = dict(self.controller(intent, self._sensors))
+            policy_controls = dict(controls)
             controls["steer"] = _clip(float(controls.get("steer", 0.0)), -1.0, 1.0)
             controls["accel"] = _clip(float(controls.get("accel", 0.0)), 0.0, 1.0)
             controls["brake"] = _clip(float(controls.get("brake", 0.0)), 0.0, 1.0)
             if controls["brake"] > 0.0:
                 controls["accel"] = 0.0
+            controls, slew_limited = apply_slew_limiter(
+                controls,
+                self._previous_controls,
+                rates=self.slew_rates,
+            )
             shield_intervened = False
             shield_reasons: tuple[str, ...] = ()
             if self.safety_shield:
@@ -144,6 +164,7 @@ if gym is not None:
                 controls = shielded.controls
                 shield_intervened = shielded.intervened
                 shield_reasons = shielded.reasons
+            self._previous_controls = dict(controls)
             next_sensors = dict(self.transport.step(controls))
             previous = self._sensors
             self.encoder.previous_sensors = previous
@@ -163,6 +184,8 @@ if gym is not None:
                 "reward_components": components,
                 "tactical_action": intent.action_id,
                 "controls": controls,
+                "policy_controls": policy_controls,
+                "slew_limited": slew_limited,
                 "dist_raced": float(next_sensors.get("distRaced", 0.0)),
                 "damage": float(next_sensors.get("damage", 0.0)),
                 "race_position": int(next_sensors.get("racePos", 0)),

@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from torcs_ai.rl import build_native_env, train_ppo
+from torcs_ai.rl import build_native_env, build_run_manifest, train_ppo, write_json_atomic
 
 
 def main() -> int:
@@ -24,12 +24,16 @@ def main() -> int:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--track", default=None)
     parser.add_argument("--overwrite-runtime", action="store_true")
+    parser.add_argument("--max-steps", type=int, default=10_000)
+    parser.add_argument("--n-steps", type=int, default=256)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--learning-rate", type=float, default=3e-4)
     args = parser.parse_args()
 
     env = build_native_env(
         args.torcs_home,
         args.runtime_home,
-        max_steps=100_000,
+        max_steps=args.max_steps,
         track=args.track,
         overwrite_runtime=args.overwrite_runtime,
     )
@@ -41,7 +45,31 @@ def main() -> int:
             seed=args.seed,
             device=args.device,
             checkpoint_freq=args.checkpoint_freq,
+            n_steps=args.n_steps,
+            batch_size=args.batch_size,
+            learning_rate=args.learning_rate,
         )
+        manifest = build_run_manifest(
+            args.torcs_home,
+            role="train",
+            track=args.track,
+            max_steps=args.max_steps,
+            seed=args.seed,
+            training={
+                "algorithm": "PPO",
+                "total_timesteps": args.timesteps,
+                "checkpoint_freq": args.checkpoint_freq,
+                "n_steps": args.n_steps,
+                "batch_size": args.batch_size,
+                "learning_rate": args.learning_rate,
+                "device": args.device,
+                "model_path": str(args.output.with_suffix(".zip")),
+            },
+        )
+        manifest_path = write_json_atomic(
+            args.output.with_suffix(".manifest.json"), manifest
+        )
+        print(f"run manifest: {manifest_path}")
     finally:
         env.close()
     return 0

@@ -9,7 +9,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from torcs_ai.rl import build_native_env, evaluate_fixed_action, evaluate_policy  # noqa: E402
+from torcs_ai.rl import (  # noqa: E402
+    build_native_env,
+    build_run_manifest,
+    evaluate_fixed_action,
+    evaluate_policy,
+    write_json_atomic,
+)
 
 
 def main() -> int:
@@ -20,6 +26,8 @@ def main() -> int:
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--track", default=None)
     parser.add_argument("--overwrite-runtime", action="store_true")
+    parser.add_argument("--max-steps", type=int, default=10_000)
+    parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
 
     try:
@@ -30,7 +38,7 @@ def main() -> int:
     baseline_env = build_native_env(
         args.torcs_home,
         args.runtime_home / "baseline",
-        max_steps=100_000,
+        max_steps=args.max_steps,
         track=args.track,
         overwrite_runtime=args.overwrite_runtime,
     )
@@ -42,7 +50,7 @@ def main() -> int:
     model_env = build_native_env(
         args.torcs_home,
         args.runtime_home / "model",
-        max_steps=100_000,
+        max_steps=args.max_steps,
         track=args.track,
         overwrite_runtime=args.overwrite_runtime,
     )
@@ -52,18 +60,25 @@ def main() -> int:
     finally:
         model_env.close()
 
-    print(
-        json.dumps(
-            {
-                "track": args.track,
-                "episodes": args.episodes,
-                "baseline": baseline,
-                "policy": learned,
-                "comparison_rule": "learned policy must beat baseline on held-out runs; no claim from reward alone",
-            },
-            indent=2,
-        )
+    payload = {
+        "track": args.track,
+        "episodes": args.episodes,
+        "max_steps": args.max_steps,
+        "baseline": baseline,
+        "policy": learned,
+        "comparison_rule": "learned policy must beat baseline on held-out runs; no claim from reward alone",
+    }
+    payload["manifest"] = build_run_manifest(
+        args.torcs_home,
+        role="benchmark",
+        track=args.track,
+        max_steps=args.max_steps,
+        results={"baseline": baseline, "policy": learned},
     )
+    if args.output is not None:
+        print(f"benchmark artifact: {write_json_atomic(args.output, payload)}")
+    else:
+        print(json.dumps(payload, indent=2))
     return 0
 
 

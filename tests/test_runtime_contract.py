@@ -101,3 +101,8 @@ def test_client_supports_non_connecting_protocol_fixture() -> None:
     client = Client(connect=False)
     assert client.so is None
     assert client.port == 3001
+
+
+def test_client_rejects_nonpositive_telemetry_timeout() -> None:
+    with pytest.raises(ValueError):
+        Client(connect=False, telemetry_timeout=0)

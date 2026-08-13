@@ -214,7 +214,8 @@ class Client:
                  trackname: Optional[str] = None, stage: Optional[int] = None,
                  debug: Optional[bool] = None, max_steps: Optional[int] = None,
                  vision: bool = False, connect: bool = True,
-                 connect_attempts: int = 5, connect_timeout: float = 1.0) -> None:
+                 connect_attempts: int = 5, connect_timeout: float = 1.0,
+                 telemetry_timeout: float = 5.0) -> None:
         self.vision = vision
         self.host = host or 'localhost'
         self.port = port or 3001
@@ -224,10 +225,13 @@ class Client:
         self.stage = stage if stage is not None else 3
         self.debug = debug or False
         self.maxSteps = max_steps or 100000
-        if connect_attempts < 1 or connect_timeout <= 0:
-            raise ValueError("connect_attempts must be positive and connect_timeout must be > 0")
+        if connect_attempts < 1 or connect_timeout <= 0 or telemetry_timeout <= 0:
+            raise ValueError(
+                "connect_attempts must be positive and timeouts must be > 0"
+            )
         self.connect_attempts = connect_attempts
         self.connect_timeout = connect_timeout
+        self.telemetry_timeout = telemetry_timeout
         self.closed_reason: Optional[str] = None
         self.S = ServerState()
         self.R = DriverAction()
@@ -277,6 +281,7 @@ class Client:
                 logger.warning("Ignoring SCR packet from unexpected peer %s", addr[0])
                 continue
             if '***identified***' in sockdata:
+                self.so.settimeout(self.telemetry_timeout)
                 logger.info(f"Client connected on {self.port}")
                 return
         self.shutdown()

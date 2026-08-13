@@ -17,6 +17,7 @@ class ScrTransportConfig:
     port: int = 3001
     connect_attempts: int = 20
     connect_timeout_seconds: float = 0.5
+    telemetry_timeout_seconds: float = 5.0
     max_steps: int = 100_000
 
     def __post_init__(self) -> None:
@@ -24,8 +25,12 @@ class ScrTransportConfig:
             raise ValueError("host cannot be empty")
         if not 1 <= self.port <= 65_535:
             raise ValueError("port must be in [1, 65535]")
-        if self.connect_attempts < 1 or self.connect_timeout_seconds <= 0:
-            raise ValueError("connection attempts and timeout must be positive")
+        if (
+            self.connect_attempts < 1
+            or self.connect_timeout_seconds <= 0
+            or self.telemetry_timeout_seconds <= 0
+        ):
+            raise ValueError("connection attempts and timeouts must be positive")
         if self.max_steps < 1:
             raise ValueError("max_steps must be positive")
 
@@ -63,6 +68,7 @@ class TorcsScrTransport:
             max_steps=self.config.max_steps,
             connect_attempts=self.config.connect_attempts,
             connect_timeout=self.config.connect_timeout_seconds,
+            telemetry_timeout=self.config.telemetry_timeout_seconds,
         )
 
     @staticmethod

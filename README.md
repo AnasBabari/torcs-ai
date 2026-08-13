@@ -122,11 +122,11 @@ authoritative runtime checks.
 The first real-policy path is explicit and bounded:
 
 ```powershell
-python scripts\train_native_agent.py --timesteps 100000 --output runs\ppo_native
-python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --episodes 3
+python scripts\train_native_agent.py --timesteps 100000 --max-steps 10000 --output runs\ppo_native
+python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --episodes 3 --max-steps 10000
 # Track-specific runs use only the doctor-approved allowlist:
 python scripts\train_native_agent.py --track road/alpine-1 --timesteps 100000
-python scripts\benchmark_native.py --model runs\ppo_native.zip --track road/ruudskogen --episodes 3
+python scripts\benchmark_native.py --model runs\ppo_native.zip --track road/ruudskogen --episodes 3 --max-steps 10000
 ```
 
 These commands require the `rl` extra, stage a private runtime copy, and close
