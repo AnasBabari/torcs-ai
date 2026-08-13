@@ -126,6 +126,8 @@ python scripts\train_native_agent.py --timesteps 100000 --max-steps 10000 --outp
 # Optional warm start from the audited tactical teacher:
 python scripts\train_native_agent.py --timesteps 100000 --teacher-guidance 0.25 --output runs\ppo_teacher
 python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --episodes 3 --max-steps 10000
+# Add --visual to watch the PPO model drive the TORCS window:
+python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --track road/forza --episodes 1 --max-steps 15000 --visual
 # Track-specific runs use only the doctor-approved allowlist:
 python scripts\train_native_agent.py --track road/alpine-1 --timesteps 100000
 # Seeded multi-track training reuses one isolated runtime per track:

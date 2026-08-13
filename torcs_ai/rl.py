@@ -139,6 +139,7 @@ def build_native_env(
     track: str | None = None,
     overwrite_runtime: bool = False,
     teacher_guidance: float = 0.0,
+    text_only: bool = True,
 ) -> RacingEnv:
     """Build one explicit native environment from an immutable installation."""
 
@@ -150,7 +151,8 @@ def build_native_env(
                 r"config\raceman\codex-race.xml"
                 if track is not None
                 else r"config\raceman\quickrace.xml"
-            )
+            ),
+            text_only=text_only,
         ),
     )
     session.prepare(overwrite=overwrite_runtime)

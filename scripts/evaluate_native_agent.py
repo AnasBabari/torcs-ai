@@ -27,6 +27,11 @@ def main() -> int:
     parser.add_argument("--episodes", type=int, default=3)
     parser.add_argument("--track", default=None)
     parser.add_argument("--overwrite-runtime", action="store_true")
+    parser.add_argument(
+        "--visual",
+        action="store_true",
+        help="show the TORCS window instead of running text-only",
+    )
     parser.add_argument("--max-steps", type=int, default=10_000)
     parser.add_argument("--output", type=Path, default=None)
     args = parser.parse_args()
@@ -42,6 +47,7 @@ def main() -> int:
         max_steps=args.max_steps,
         track=args.track,
         overwrite_runtime=args.overwrite_runtime,
+        text_only=not args.visual,
     )
     try:
         model = PPO.load(str(args.model), env=env)
