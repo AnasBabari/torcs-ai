@@ -57,16 +57,28 @@ class TorcsEnv:
         if self.gear_change:
             action_low[-1] = 1.0
             action_high[-1] = 6.0
-        self.action_space = spaces.Box(low=action_low, high=action_high, dtype=np.float32)
+        self.action_space = spaces.Box(
+            low=action_low.astype(np.float32),
+            high=action_high.astype(np.float32),
+            dtype=np.float32,
+        )
 
         if vision is False:
             high = np.array([1., np.inf, np.inf, np.inf, 1., np.inf, 1., np.inf])
             low = np.array([0., -np.inf, -np.inf, -np.inf, 0., -np.inf, 0., -np.inf])
-            self.observation_space = spaces.Box(low=low, high=high)
+            self.observation_space = spaces.Box(
+                low=low.astype(np.float32),
+                high=high.astype(np.float32),
+                dtype=np.float32,
+            )
         else:
             high = np.array([1., np.inf, np.inf, np.inf, 1., np.inf, 1., np.inf, 255])
             low = np.array([0., -np.inf, -np.inf, -np.inf, 0., -np.inf, 0., -np.inf, 0])
-            self.observation_space = spaces.Box(low=low, high=high)
+            self.observation_space = spaces.Box(
+                low=low.astype(np.float32),
+                high=high.astype(np.float32),
+                dtype=np.float32,
+            )
 
     def step(self, u):
        #print("Step")

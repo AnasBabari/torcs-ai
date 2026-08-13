@@ -52,4 +52,7 @@ def write_single_track_race_config(
         raise TorcsConfigurationError("base race config has no unambiguous track block")
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(contents, encoding="utf-8", newline="\n")
-    return output_config
+    # Return a path that composes correctly on both Windows and POSIX callers.
+    # The native command builder may still receive the platform's separator
+    # when the staged runtime is launched.
+    return str(Path(output_config.replace("\\", "/")))
