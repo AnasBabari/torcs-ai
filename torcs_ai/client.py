@@ -6,15 +6,10 @@ data parsing, and driver actions.
 """
 
 import socket
-import sys
-import os
 import time
-import platform
 from typing import Optional, Dict, List, Any, Tuple
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 PI = 3.141592653589793
@@ -28,16 +23,20 @@ class ServerState:
         self.d: Dict[str, Any] = {}
 
     def parse_server_str(self, server_string: str) -> None:
-        """Parse the server string into a dictionary."""
-        try:
-            self.servstr = server_string.strip()[:-1]
-            sslisted = self.servstr.strip().lstrip('(').rstrip(')').split(')(')
-            for i in sslisted:
-                w = i.split(' ')
-                if len(w) > 1:
-                    self.d[w[0]] = destringify(w[1:])
-        except Exception as e:
-            logger.error(f"Error parsing server string: {e}")
+        """Parse one complete SCR packet without retaining stale fields."""
+        text = server_string.strip().strip('\x00')
+        if not text.startswith('(') or not text.endswith(')'):
+            raise ValueError("SCR packet must be a parenthesized sensor message")
+        fields: Dict[str, Any] = {}
+        for item in text[1:-1].split(')('):
+            words = item.split()
+            if len(words) < 2 or not words[0]:
+                raise ValueError("SCR packet contains an invalid sensor field")
+            fields[words[0]] = destringify(words[1:])
+        if not fields:
+            raise ValueError("SCR packet contains no sensor fields")
+        self.servstr = text
+        self.d = fields
 
     def __repr__(self) -> str:
         return self.fancyout()
@@ -165,6 +164,11 @@ class DriverAction:
         self.d['brake'] = max(0, min(1, self.d['brake']))
         self.d['accel'] = max(0, min(1, self.d['accel']))
         self.d['clutch'] = max(0, min(1, self.d['clutch']))
+        if self.d['accel'] > 0 and self.d['brake'] > 0:
+            if self.d['brake'] >= self.d['accel']:
+                self.d['accel'] = 0.0
+            else:
+                self.d['brake'] = 0.0
         if self.d['gear'] not in [-1, 0, 1, 2, 3, 4, 5, 6]:
             self.d['gear'] = 0
         if self.d['meta'] not in [0, 1]:
@@ -209,7 +213,8 @@ class Client:
                  sid: Optional[str] = None, max_episodes: Optional[int] = None,
                  trackname: Optional[str] = None, stage: Optional[int] = None,
                  debug: Optional[bool] = None, max_steps: Optional[int] = None,
-                 vision: bool = False) -> None:
+                 vision: bool = False, connect: bool = True,
+                 connect_attempts: int = 5, connect_timeout: float = 1.0) -> None:
         self.vision = vision
         self.host = host or 'localhost'
         self.port = port or 3001
@@ -219,63 +224,66 @@ class Client:
         self.stage = stage if stage is not None else 3
         self.debug = debug or False
         self.maxSteps = max_steps or 100000
+        if connect_attempts < 1 or connect_timeout <= 0:
+            raise ValueError("connect_attempts must be positive and connect_timeout must be > 0")
+        self.connect_attempts = connect_attempts
+        self.connect_timeout = connect_timeout
+        self.closed_reason: Optional[str] = None
         self.S = ServerState()
         self.R = DriverAction()
         self.so: Optional[socket.socket] = None
-        self.setup_connection()
+        if connect:
+            self.setup_connection()
 
     def setup_connection(self) -> None:
         """Establish connection to TORCS server."""
+        self.shutdown()
         try:
             self.so = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.so.settimeout(1)
+            self.so.settimeout(self.connect_timeout)
         except socket.error as e:
-            logger.error(f"Could not create socket: {e}")
-            sys.exit(-1)
+            raise ConnectionError(f"Could not create socket: {e}") from e
 
-        n_fail = 5
-        while True:
+        allowed_hosts = {self.host}
+        try:
+            allowed_hosts.add(socket.gethostbyname(self.host))
+        except socket.gaierror:
+            pass
+        for attempt in range(1, self.connect_attempts + 1):
             angles = "-45 -19 -12 -7 -4 -2.5 -1.7 -1 -.5 0 .5 1 1.7 2.5 4 7 12 19 45"
             initmsg = f'{self.sid}(init {angles})'
 
             try:
                 self.so.sendto(initmsg.encode(), (self.host, self.port))
             except socket.error as e:
-                logger.error(f"Send error: {e}")
-                sys.exit(-1)
+                self.shutdown()
+                raise ConnectionError(f"Send error: {e}") from e
 
             try:
                 sockdata, addr = self.so.recvfrom(DATA_SIZE)
                 sockdata = sockdata.decode('utf-8')
-            except socket.error as e:
-                logger.info(f"Waiting for server on {self.port}... ({n_fail})")
-                if n_fail < 0:
-                    self._restart_torcs()
-                    n_fail = 5
-                n_fail -= 1
+            except (socket.timeout, ConnectionResetError):
+                logger.info(
+                    "Waiting for server on %s (attempt %s/%s)",
+                    self.port, attempt, self.connect_attempts,
+                )
+                time.sleep(min(0.25, self.connect_timeout / 2))
                 continue
+            except (socket.error, UnicodeDecodeError) as e:
+                self.shutdown()
+                raise ConnectionError(f"Error receiving server identification: {e}") from e
 
+            if addr[0] not in allowed_hosts:
+                logger.warning("Ignoring SCR packet from unexpected peer %s", addr[0])
+                continue
             if '***identified***' in sockdata:
                 logger.info(f"Client connected on {self.port}")
-                break
-
-    def _restart_torcs(self) -> None:
-        """Restart TORCS server if connection fails."""
-        logger.info("Attempting to restart TORCS...")
-        if platform.system() == 'Windows':
-            os.system('taskkill /F /IM wtorcs.exe 2>nul')
-            time.sleep(1.0)
-            torcs_path = r'C:\torcs\torcs\wtorcs.exe'
-            if os.path.exists(torcs_path):
-                os.system(f'start "" "{torcs_path}" -r quickrace')
-            else:
-                logger.warning(f"TORCS not found at {torcs_path}")
-        else:
-            os.system('pkill torcs')
-            time.sleep(1.0)
-            vision_flag = '-vision' if self.vision else ''
-            os.system(f'torcs -nofuel -nodamage -nolaptime {vision_flag} &')
-        time.sleep(2.0)
+                return
+        self.shutdown()
+        raise TimeoutError(
+            f"TORCS did not identify the client on {self.host}:{self.port} "
+            f"after {self.connect_attempts} attempts"
+        )
 
     def get_servers_input(self) -> None:
         """Receive and parse input from server."""
@@ -286,8 +294,17 @@ class Client:
             try:
                 sockdata, addr = self.so.recvfrom(DATA_SIZE)
                 sockdata = sockdata.decode('utf-8')
-            except socket.error:
-                print('.', end=' ')
+            except socket.timeout as exc:
+                raise TimeoutError(f"Timed out waiting for TORCS on port {self.port}") from exc
+            except (socket.error, UnicodeDecodeError) as exc:
+                raise ConnectionError(f"Error receiving from TORCS: {exc}") from exc
+
+            try:
+                expected_hosts = {self.host, socket.gethostbyname(self.host)}
+            except socket.gaierror:
+                expected_hosts = {self.host}
+            if addr[0] not in expected_hosts:
+                logger.warning("Ignoring SCR packet from unexpected peer %s", addr[0])
                 continue
 
             if '***identified***' in sockdata:
@@ -304,7 +321,10 @@ class Client:
             elif not sockdata:
                 continue
             else:
-                self.S.parse_server_str(sockdata)
+                try:
+                    self.S.parse_server_str(sockdata)
+                except ValueError as exc:
+                    raise ValueError(f"Malformed SCR telemetry: {exc}") from exc
                 if self.debug:
                     print(self.S)
                 break
@@ -317,8 +337,7 @@ class Client:
             message = repr(self.R)
             self.so.sendto(message.encode(), (self.host, self.port))
         except socket.error as e:
-            logger.error(f"Error sending to server: {e}")
-            sys.exit(-1)
+            raise ConnectionError(f"Error sending to server: {e}") from e
         if self.debug:
             print(self.R.fancyout())
 
@@ -340,6 +359,8 @@ def destringify(s: Any) -> Any:
         except ValueError:
             return s
     elif isinstance(s, list):
+        if len(s) == 0:
+            return s
         if len(s) < 2:
             return destringify(s[0])
         else:

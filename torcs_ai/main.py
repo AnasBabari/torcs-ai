@@ -6,47 +6,34 @@ A sophisticated machine learning-based racing AI for TORCS (The Open Racing Car 
 Features advanced neural networks, automated training, real-time visualization, and continuous learning.
 """
 
-import sys
 import logging
+import sys
 import time
-from typing import Optional
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('torcs_ai.log'),
-        logging.StreamHandler(sys.stdout)
-    ]
-)
 logger = logging.getLogger(__name__)
-
-from torcs_ai.client import Client
-from torcs_ai.training import (
-    automated_training_pipeline,
-    continuous_learning_mode,
-    perfection_training_pipeline,
-    elite_training_curriculum,
-    intensive_training_session,
-    drive_modular
-)
-from torcs_ai.utils import analyze_ml_models, generate_racing_insights
-from torcs_ai.visualization import visualizer
 
 
 def main():
     """Main entry point for TORCS Racing AI."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        handlers=[logging.StreamHandler(sys.stdout)],
+    )
     if len(sys.argv) > 1:
         command = sys.argv[1]
 
         if command == 'analyze':
+            from torcs_ai.utils import analyze_ml_models, generate_racing_insights
+
             # Run analysis mode
             logger.info("🔍 Running ML model analysis...")
             analyze_ml_models()
             generate_racing_insights()
 
         elif command == 'train':
+            from torcs_ai.training import automated_training_pipeline
+
             # Automated training pipeline
             num_races = int(sys.argv[2]) if len(sys.argv) > 2 else 10
             logger.info(f"🚀 Starting automated training pipeline with {num_races} races...")
@@ -54,6 +41,8 @@ def main():
             logger.info(f"✅ Training completed. Stats: {stats}")
 
         elif command == 'continuous':
+            from torcs_ai.training import continuous_learning_mode
+
             # Continuous learning mode
             max_races = int(sys.argv[2]) if len(sys.argv) > 2 else 50
             threshold = float(sys.argv[3]) if len(sys.argv) > 3 else 0.5
@@ -62,18 +51,24 @@ def main():
             logger.info(f"✅ Continuous learning completed. Stats: {stats}")
 
         elif command == 'perfection':
+            from torcs_ai.training import perfection_training_pipeline
+
             # Ultimate perfection training
             logger.info("🏆 Starting perfection training pipeline...")
             stats = perfection_training_pipeline()
             logger.info(f"✅ Perfection training completed. Stats: {stats}")
 
         elif command == 'elite':
+            from torcs_ai.training import elite_training_curriculum
+
             # Elite curriculum training
             logger.info("👑 Starting elite curriculum training...")
             stats = elite_training_curriculum()
             logger.info(f"✅ Elite training completed. Stats: {stats}")
 
         elif command == 'intensive':
+            from torcs_ai.training import intensive_training_session
+
             # Intensive training session
             intensity = sys.argv[2] if len(sys.argv) > 2 else 'extreme'
             logger.info(f"🔥 Starting intensive training ({intensity})...")
@@ -81,6 +76,8 @@ def main():
             logger.info(f"✅ Intensive training completed. Stats: {stats}")
 
         elif command == 'demo':
+            from torcs_ai.globals import ml_racing_ai, visualizer
+
             # Demo mode - show training capabilities without TORCS
             print("🎯 TORCS ML Racing AI - Advanced Training Demo")
             print("="*60)
@@ -103,7 +100,6 @@ def main():
             print("   • Comprehensive performance tracking")
             print()
             print("📊 Current Status:")
-            from torcs_ai.ml_models import ml_racing_ai
             print(f"   • ML Models: {'LOADED' if ml_racing_ai.is_trained else 'NOT TRAINED'}")
             print(f"   • Training Data: {len(ml_racing_ai.data_collector.experiences)} experiences")
             print(f"   • Performance Data: {len(visualizer.performance_data)} points")
@@ -142,6 +138,11 @@ def main():
             print("Use 'python -m torcs_ai.main demo' for available options.")
 
     else:
+        from torcs_ai.client import Client
+        from torcs_ai.globals import ml_racing_ai, visualizer
+        from torcs_ai.training import drive_modular
+        from torcs_ai.utils import analyze_ml_models, generate_racing_insights
+
         # Run racing mode (default)
         logger.info("🏎️ Starting Advanced Machine Learning Racing AI...")
         logger.info("🤖 Neural Networks: LOADED")
@@ -149,7 +150,7 @@ def main():
         logger.info("🎯 Target: Ultimate racing performance with continuous learning")
 
         try:
-            C = Client(p=3001)
+            C = Client(port=3001)
             race_start_time = time.time()
 
             for step in range(C.maxSteps, 0, -1):
@@ -161,12 +162,12 @@ def main():
                 if step % 1000 == 0:
                     progress = (C.maxSteps - step) / C.maxSteps * 100
                     elapsed = time.time() - race_start_time
-                    logger.info(".1f")
+                    logger.info("Progress %.1f%%; elapsed %.1fs", progress, elapsed)
 
             C.shutdown()
 
             race_time = time.time() - race_start_time
-            logger.info(".2f")
+            logger.info("Race finished in %.2fs", race_time)
 
             # Final analysis
             logger.info("🏁 RACE COMPLETE - Generating final analysis...")

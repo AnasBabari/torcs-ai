@@ -1,14 +1,16 @@
-torch>=2.0.0
-torchvision>=0.15.0
-numpy>=1.21.0
-pandas>=1.3.0
-scikit-learn>=1.0.0
-matplotlib>=3.5.0
-plotly>=5.0.0
-seaborn>=0.11.0
-tqdm>=4.62.0
-psutil>=5.8.0
-gym>=0.21.0
-stable-baselines3>=1.5.0
-opencv-python>=4.5.0
-pillow>=8.0.0
+# Core research runtime
+torch>=2.2,<3
+numpy>=1.24,<3
+
+# Optional-compatible legacy analysis/runtime helpers currently used by the
+# monolith and visualizer.  These remain pinned by the lock file in releases.
+pandas>=2.0,<3
+scikit-learn>=1.3,<2
+psutil>=5.9,<7
+matplotlib>=3.7,<4
+plotly>=5.18,<7
+tqdm>=4.66,<5
+
+# Current RL/environment APIs
+gymnasium>=0.29,<1.1
+stable-baselines3>=2.3,<3

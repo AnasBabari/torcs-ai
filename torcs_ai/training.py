@@ -74,7 +74,7 @@ def automated_training_pipeline(num_races: int = 10, max_steps_per_race: int = 5
 
         try:
             # Create client for this race
-            C = Client(p=3001, e=1, m=max_steps_per_race)
+            C = Client(port=3001, max_episodes=1, max_steps=max_steps_per_race)
 
             # Reset step counter for data collection
             drive_modular.step_counter = 0
@@ -96,12 +96,12 @@ def automated_training_pipeline(num_races: int = 10, max_steps_per_race: int = 5
                 if step % 1000 == 0:
                     progress = (C.maxSteps - step) / C.maxSteps * 100
                     elapsed = time.time() - start_race_time
-                    logger.info(".1f")
+                    logger.info("Progress %.1f%%; elapsed %.1fs", progress, elapsed)
 
             C.shutdown()
 
             race_time = time.time() - start_race_time
-            logger.info(".2f")
+            logger.info("Race finished in %.2fs", race_time)
 
             # Update training stats
             training_stats['races_completed'] += 1
@@ -199,7 +199,7 @@ def continuous_learning_mode(max_races: int = 50, performance_threshold: float =
 
         try:
             # Run one race
-            C = Client(p=3001, e=1, m=3000)  # Shorter races for continuous learning
+            C = Client(port=3001, max_episodes=1, max_steps=3000)  # Shorter races for continuous learning
 
             drive_modular.step_counter = 0
             start_race_time = time.time()
@@ -212,12 +212,12 @@ def continuous_learning_mode(max_races: int = 50, performance_threshold: float =
                 if step % 1000 == 0:
                     progress = (C.maxSteps - step) / C.maxSteps * 100
                     elapsed = time.time() - start_race_time
-                    logger.info(".1f")
+                    logger.info("Progress %.1f%%; elapsed %.1fs", progress, elapsed)
 
             C.shutdown()
 
             race_time = time.time() - start_race_time
-            logger.info(".2f")
+            logger.info("Race finished in %.2fs", race_time)
 
             # Check performance
             if len(visualizer.performance_data) >= 20:
@@ -231,7 +231,7 @@ def continuous_learning_mode(max_races: int = 50, performance_threshold: float =
 
                 moving_avg = np.mean(recent_performances)
 
-                logger.info(".3f")
+                logger.info("Moving average performance: %.3f", moving_avg)
 
                 # Check if we've reached the performance threshold
                 if moving_avg >= performance_threshold:

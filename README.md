@@ -1,200 +1,191 @@
-﻿# TORCS Racing AI - Advanced PyTorch Implementation
+# TORCS AI
 
-[![GitHub](https://img.shields.io/badge/GitHub-AnasBabari/torcs--ai-blue)](https://github.com/AnasBabari/torcs-ai)
-[![Python](https://img.shields.io/badge/Python-3.8+-green)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-red)](https://pytorch.org/)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+Research tooling for training and evaluating racing agents against the native
+Windows TORCS installation. The current development target is a competitive,
+hierarchical discrete policy: the learned policy chooses tactical racing
+intents, while a deterministic controller handles smooth steering, speed,
+gears, and safety recovery. A PPO entry point is provided for the canonical
+nine-action environment; the older DQN implementation remains a legacy
+checkpoint-compatible path until its feature schema is versioned.
 
-A state-of-the-art racing AI for TORCS (The Open Racing Car Simulator) featuring PyTorch neural networks, Deep Q-Learning, automated training pipelines, and comprehensive visualization.
+The project is not yet a production-trained champion. Performance claims are
+made only from the versioned benchmark reports described below.
 
-##  Features
+## Native simulator layout
 
-- **PyTorch Neural Networks**: Advanced deep learning models for racing prediction
-- **Deep Q-Learning**: Reinforcement learning with experience replay
-- **Automated Training**: Multiple training strategies and curriculum learning
-- **Real-time Visualization**: Interactive dashboards with matplotlib/plotly
-- **Professional Architecture**: Modular design with type hints and documentation
-- **Comprehensive Testing**: 100% test coverage with pytest
+The supported local installation is:
 
-##  Requirements
+```text
+TORCS game:       C:\torcs\torcs
+Executable:       C:\torcs\torcs\wtorcs.exe
+AI project:       C:\torcs\gym_torcs
+Runtime staging:  C:\torcs\gym_torcs\.runtime\
+```
 
-- **TORCS**: The Open Racing Car Simulator (installed in \C:\torcs\torcs\)
-- **Python 3.8+**
-- **PyTorch 2.0+**
-- **CUDA** (optional, for GPU acceleration)
+The installed game is treated as read-only. The runtime manager stages an
+isolated copy before starting a race, writes logs/configuration only into that
+copy, and verifies the installed executable and simulator assets by checksum.
+Do not place checkpoints, race outputs, or generated XML in the installation
+directory.
 
-##  Installation
+The installed distribution currently provides the SCR server, ten SCR driver
+slots, ports 3001–3010, the `car1-trb1` SCR car, the benchmark tracks, and the
+built-in drivers used by the competitive suite.
 
-1. **Clone the repository:**
-   `ash
-   git clone https://github.com/AnasBabari/torcs-ai.git
-   cd torcs-ai
-   `
+## Setup
 
-2. **Install dependencies:**
-   `ash
-   pip install -r requirements.txt
-   `
+Use Python 3.11 or 3.12. From PowerShell:
 
-3. **Install the package:**
-   `ash
-   pip install -e .
-   `
+```powershell
+cd C:\torcs\gym_torcs
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+python -m pip install -e .
+```
 
-##  Quick Start
+The simulator path can be overridden for a different local installation:
 
-### 1. Start TORCS Server
+```powershell
+$env:TORCS_HOME = 'C:\torcs\torcs'
+```
 
-**Manual Startup (Recommended):**
-`ash
-# Open Command Prompt as Administrator
-cd C:\torcs\torcs
-set SDL_VIDEODRIVER=windib
-wtorcs.exe -r config\raceman\quickrace.xml
-`
+## Verify the installation
 
-Wait for the message: \Waiting for request on port 3001\
+Run the read-only doctor before training:
 
-### 2. Run Training
+```powershell
+python scripts\torcs_doctor.py --torcs-home C:\torcs\torcs
+python scripts\torcs_doctor.py --torcs-home C:\torcs\torcs --json
+```
 
-`python
-from torcs_ai.training import automated_training_pipeline
+The doctor verifies `wtorcs.exe`, the SCR server DLL/configuration, the ten
+driver slots, required tracks, required opponent modules, and records SHA-256
+identities. It does not start TORCS or modify files.
 
-# Run automated training
-stats = automated_training_pipeline(num_races=5, max_steps_per_race=5000)
-print(f"Training completed: {stats}")
-`
+## Native smoke test
 
-### 3. Run with Visualization
+The first runtime probe stages a copy and checks process startup, SCR
+identification, telemetry, one bounded action, and cleanup. The command below
+is intentionally bounded and leaves `C:\torcs\torcs` untouched:
 
-`python
-from torcs_ai.training import continuous_learning_mode
+```powershell
+python scripts\native_smoke.py --torcs-home C:\torcs\torcs --steps 1000
+# Full local release gate, including an installed-tree fingerprint check:
+.\scripts\verify_native_release.ps1 -TorcsHome C:\torcs\torcs -Steps 1000
+```
 
-# Start continuous learning with real-time visualization
-continuous_learning_mode(max_races=10, visualize=True)
-`
+The process manager uses `shell=False` and owns the child PID. Global process
+kills such as `pkill torcs` or `taskkill /IM wtorcs.exe` are not part of the
+supported workflow.
 
-##  Advanced Usage
+## Current agent contract
 
-### Custom Training Pipeline
+The canonical tactical action space has exactly nine actions:
 
-`python
-from torcs_ai.training import elite_training_curriculum
+```text
+0 left + brake       1 left + hold        2 left + push
+3 center + brake     4 center + hold      5 center + push
+6 right + brake      7 right + hold       8 right + push
+```
 
-# Advanced curriculum-based training
-results = elite_training_curriculum(
-    curriculum_levels=5,
-    races_per_level=3,
-    performance_threshold=0.8
-)
-`
+The policy must always emit an integer in `[0, 8]`. Longitudinal actions never
+apply throttle and brake simultaneously. A slew limiter and safety shield
+convert the tactical intent into valid TORCS actuator values. Shield
+interventions are logged and reported; they are not hidden as model skill.
 
-### Model Analysis
+The competitive telemetry encoder is versioned as
+`competitive-telemetry-v1`. It produces a finite 118-value `float32`
+observation containing ego telemetry, track rays, opponent ranges and closing
+rates, previous applied controls, traffic clearance, and race context. Frame
+stacking is not silently assumed; an experiment that adds it must version the
+observation schema and checkpoint contract.
 
-`python
-from torcs_ai.utils import analyze_ml_models
+## Development commands
 
-# Analyze trained models
-analyze_ml_models()
-`
+```text
+torcs-ai doctor
+torcs-ai simulator prepare
+torcs-ai simulator probe
+torcs-ai collect
+torcs-ai train --config <file>
+torcs-ai evaluate --checkpoint <file>
+torcs-ai benchmark --suite competitive-v1
+torcs-ai report --run <run-id>
+```
 
-### Interactive Dashboard
+The command surface is being introduced incrementally. Until the full CLI is
+available, `scripts\torcs_doctor.py` and the native smoke script are the
+authoritative runtime checks.
 
-`python
-from torcs_ai.visualization import RacingVisualizer
+The first real-policy path is explicit and bounded:
 
-viz = RacingVisualizer()
-viz.create_interactive_dashboard()
-`
+```powershell
+python scripts\train_native_agent.py --timesteps 100000 --output runs\ppo_native
+python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --episodes 3
+# Track-specific runs use only the doctor-approved allowlist:
+python scripts\train_native_agent.py --track road/alpine-1 --timesteps 100000
+python scripts\benchmark_native.py --model runs\ppo_native.zip --track road/ruudskogen --episodes 3
+```
 
-##  Architecture
+These commands require the `rl` extra, stage a private runtime copy, and close
+the simulator they started. They do not claim competitiveness until a frozen
+benchmark report compares completion, pace, damage, and position outcomes to
+the fixed-driver baseline.
 
-`
-torcs_ai/
- client.py          # TORCS server communication
- ml_models.py       # PyTorch neural networks & DQN
- training.py        # Automated training pipelines
- visualization.py   # Real-time plotting & dashboards
- utils.py          # Analysis & server management
- globals.py        # Global instances
- main.py           # CLI interface
- __init__.py       # Package exports
-`
+## Evaluation policy
 
-##  Testing
+Racing policies are not scored by classification accuracy. The benchmark
+reports:
 
-Run the comprehensive test suite:
+- completion, finish, podium, and win rates;
+- median and interquartile-mean return;
+- conditional lap time and distance before failure;
+- off-track events, collision events, and damage per kilometre;
+- clean overtakes and lost positions;
+- safety-shield interventions per kilometre;
+- p50/p95 inference latency; and
+- bootstrap confidence intervals over independent seeds.
 
-`ash
-pytest tests/ -v --cov=torcs_ai
-`
+Training tracks are `road/alpine-1`, `road/forza`, and `oval/michigan`.
+Validation uses `road/ruudskogen`. Held-out testing uses `road/spring` and
+`road/street-1`. The built-in roster is `berniw`, `bt`, `inferno`, `olethros`,
+and `tita`. Hyperparameters and reward weights are selected only on training
+and validation tracks.
 
-##  Key Components
+The first competitive release requires reliable solo completion before pace,
+then traffic completion before overtaking, and finally held-out races against
+fixed bots and frozen self-play opponents. Negative results remain valid
+research outcomes.
 
-### ML Models
-- **RacingNetwork**: PyTorch neural network for action prediction
-- **DQNAgent**: Deep Q-Learning with experience replay
-- **MLRacingAI**: Main AI controller with adaptive behavior
+## Artifacts and reproducibility
 
-### Training Strategies
-- **Automated Pipeline**: Multi-race training with progress tracking
-- **Continuous Learning**: Real-time model improvement
-- **Elite Curriculum**: Progressive difficulty training
-- **Intensive Sessions**: High-intensity training blocks
+Runs are stored under `runs/<run-id>/` and must contain the resolved
+configuration, Git commit, simulator and track checksums, environment/action/
+reward versions, seed, hardware/dependency metadata, episode metrics,
+checkpoint checksum, and logs. Checkpoints are written atomically and loaded
+only through the trusted state-dict path.
 
-### Visualization
-- **Performance Tracking**: Speed, reward, and action metrics
-- **Model Analysis**: Feature importance and prediction visualization
-- **Interactive Dashboards**: Real-time monitoring
+## CI
 
-##  Configuration
+Pull-request CI runs Python compilation, tests, package installation, and the
+non-simulator checks on Python 3.11 and 3.12. A Windows runner with access to
+`C:\torcs\torcs` is required for the native launch, SCR handshake, multi-slot,
+lap-completion, and process-cleanup release gate. Hosted CI must not claim that
+native simulator tests ran when the installation is unavailable.
 
-### TORCS Setup
-- Install TORCS in \C:\torcs\torcs\
-- Use the provided \quickrace.xml\ configuration
-- Set \SDL_VIDEODRIVER=windib\ for proper display handling
+## Licensing
 
-### Environment Variables
-`ash
-# For TORCS display compatibility
-set SDL_VIDEODRIVER=windib
+The repository’s Python code and the installed TORCS distribution are separate
+artifacts. TORCS documentation identifies GPL-covered components and artwork
+with additional restrictions. The simulator tree and a public simulator image
+must not be redistributed until a component-by-component licence and
+attribution audit is complete.
 
-# For PyTorch GPU usage (if available)
-set CUDA_VISIBLE_DEVICES=0
-`
+## Status
 
-##  Performance
-
-- **Neural Networks**: 10-100x faster than sklearn baselines
-- **DQN Learning**: Superior long-term performance
-- **Real-time Processing**: Sub-millisecond inference
-- **GPU Acceleration**: Automatic CUDA utilization
-
-##  Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Add tests for new functionality
-4. Ensure all tests pass
-5. Submit a pull request
-
-##  License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
-
-##  Acknowledgments
-
-- Based on the original TORCS simulator
-- Inspired by OpenAI Gym environments
-- Built with PyTorch and modern Python practices
-
-##  Support
-
-For issues and questions:
-- Open an issue on GitHub
-- Check the comprehensive documentation
-- Review the test suite for usage examples
-
----
-
-**Ready to dominate the tracks with AI! **
+The native runtime, read-only installation doctor, isolated staging, strict
+SCR client, telemetry schema, and nine-action contract are under active
+development. The full competitive benchmark and trained policy have not yet
+been frozen or published.

@@ -4,10 +4,6 @@ Utility Functions for TORCS Racing AI
 Provides analysis, server management, and helper functions.
 """
 
-import os
-import time
-import platform
-import subprocess
 import logging
 from typing import Optional
 import numpy as np
@@ -246,7 +242,12 @@ def detect_racing_scenarios(sensor_data: dict) -> dict:
     scenarios['high_speed_corner'] = speed > 150 and curvature > 0.5
     scenarios['hairpin_corner'] = curvature > 1.0
     scenarios['straight_high_speed'] = speed > 250 and curvature < 0.2
-    scenarios['crowded_track'] = any(op > 50 for op in sensor_data.get('opponents', []))
+    # TORCS uses large distances (often 200) to represent no nearby car.
+    # Only finite, non-sentinel sensors below the close-traffic threshold can
+    # indicate a crowded track.
+    opponents = [float(op) for op in sensor_data.get('opponents', [])]
+    close_opponents = [op for op in opponents if 0 <= op < 50]
+    scenarios['crowded_track'] = len(close_opponents) >= 2
 
     return scenarios
 

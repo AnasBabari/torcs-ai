@@ -120,17 +120,18 @@ dmypy.json
 *.swo
 *~
 
-# TORCS specific
-*.xml
-*.rgb
-*.wav
-*.png
-*.jpg
-*.jpeg
-*.gif
-*.bmp
-*.tiff
-*.svg
+# TORCS runtime outputs.  XML and image files are not globally ignored because
+# track and simulator assets are legitimate versioned inputs.
+.runtime/
+runs/
+runtime.log
+race_data.csv
+training_data.csv
+final_race_analysis.png
+final_race_dashboard.html
+ml_model_analysis.png
+racing_performance.png
+racing_sensor_analysis.png
 
 # ML models and data
 models/
