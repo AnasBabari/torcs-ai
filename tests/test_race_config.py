@@ -37,3 +37,24 @@ def test_track_config_rejects_unapproved_track(tmp_path: Path) -> None:
     runtime = _runtime(tmp_path)
     with pytest.raises(TorcsConfigurationError):
         write_single_track_race_config(runtime, "../outside")
+
+
+def test_track_config_converts_only_interactive_player_to_scr_server(tmp_path: Path) -> None:
+    runtime = _runtime(tmp_path)
+    source = runtime / "config" / "raceman" / "quickrace.xml"
+    source.write_text(
+        source.read_text(encoding="utf-8")
+        + '<attstr name="focused module" val="human"/>\n'
+        + '<section name="1"><attnum name="idx" val="0"/>'
+        + '<attstr name="module" val="human"/></section>\n'
+        + '<section name="Drivers Start List"><section name="1">'
+        + '<attstr name="module" val="human"/><attnum name="idx" val="0"/>'
+        + '</section></section>\n'
+        + '<section name="2"><attstr name="module" val="human"/></section>\n',
+        encoding="utf-8",
+    )
+    relative = write_single_track_race_config(runtime, "road/forza")
+    contents = (runtime / Path(relative)).read_text(encoding="utf-8")
+    assert 'focused module" val="scr_server"' in contents
+    assert contents.count('module" val="scr_server"') == 3
+    assert '<section name="2"><attstr name="module" val="human"/></section>' in contents

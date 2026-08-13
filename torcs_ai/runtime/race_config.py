@@ -15,6 +15,21 @@ _TRACK_BLOCK = re.compile(
     r'(?P<category>[^"]+)"\s*/>',
     flags=re.DOTALL,
 )
+_FOCUSED_HUMAN = re.compile(
+    r'(?P<prefix><attstr\s+name="focused module"\s+val=")human("\s*/>)'
+)
+_PLAYER_DRIVER = re.compile(
+    r'(?P<prefix><section\s+name="1">\s*'
+    r'<attnum\s+name="idx"\s+val="0"\s*/>\s*'
+    r'<attstr\s+name="module"\s+val=")human(?P<suffix>"\s*/>)',
+    flags=re.DOTALL,
+)
+_PLAYER_START = re.compile(
+    r'(?P<prefix><section\s+name="1">\s*'
+    r'<attstr\s+name="module"\s+val=")human(?P<suffix>"\s*/>\s*'
+    r'<attnum\s+name="idx"\s+val="0"\s*/>)',
+    flags=re.DOTALL,
+)
 
 
 def write_single_track_race_config(
@@ -50,6 +65,13 @@ def write_single_track_race_config(
     contents = _TRACK_BLOCK.sub(replace, contents, count=1)
     if replacement_count != 1:
         raise TorcsConfigurationError("base race config has no unambiguous track block")
+    # The source installation may be configured for interactive human play.
+    # A generated single-track config is exclusively for the owned SCR client,
+    # so convert only the focused index-0 driver and leave opponent entries
+    # untouched.  This keeps the installed quick-race menu human-playable.
+    contents = _FOCUSED_HUMAN.sub(r'\g<prefix>scr_server\2', contents, count=1)
+    contents = _PLAYER_DRIVER.sub(r'\g<prefix>scr_server\g<suffix>', contents, count=1)
+    contents = _PLAYER_START.sub(r'\g<prefix>scr_server\g<suffix>', contents, count=1)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(contents, encoding="utf-8", newline="\n")
     # Return a path that composes correctly on both Windows and POSIX callers.
