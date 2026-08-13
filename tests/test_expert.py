@@ -25,3 +25,8 @@ def test_expert_pushes_when_far_below_target_speed() -> None:
 def test_expert_brakes_for_large_heading_error() -> None:
     action = expert_tactical_action(_sensors(angle=0.8, speedX=150.0))
     assert action in (TacticalAction.LEFT_BRAKE, TacticalAction.RIGHT_BRAKE)
+
+
+def test_expert_selects_right_recovery_for_positive_heading_error() -> None:
+    action = expert_tactical_action(_sensors(angle=0.3, speedX=60.0))
+    assert action in (TacticalAction.RIGHT_HOLD, TacticalAction.RIGHT_PUSH)

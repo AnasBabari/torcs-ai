@@ -11,6 +11,7 @@ def test_shield_projects_edge_and_heading_recovery() -> None:
     assert result.intervened
     assert "edge_recovery" in result.reasons
     assert "heading_recovery" in result.reasons
+    assert result.controls["steer"] > 0.0
     assert result.controls["accel"] == 0.0
     assert result.controls["brake"] > 0.0
 

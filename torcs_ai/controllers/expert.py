@@ -31,7 +31,9 @@ def expert_tactical_action(sensors: Mapping[str, Any]) -> int:
     angle = float(sensors.get("angle", 0.0))
     speed = float(sensors.get("speedX", 0.0))
     curvature = _curvature_signal(sensors)
-    desired_steer = -(0.8 * track_pos + 1.8 * angle)
+    # Keep the same TORCS heading convention as the low-level controller:
+    # positive angle requires positive steering for recovery.
+    desired_steer = -0.8 * track_pos + 1.8 * angle
     if desired_steer < -0.12:
         lateral = 0
     elif desired_steer > 0.12:

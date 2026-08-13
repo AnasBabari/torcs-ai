@@ -43,7 +43,9 @@ def apply_safety_shield(
         result["accel"] = min(result["accel"], 0.2)
         reasons.append("edge_recovery")
     if abs(angle) >= 0.65:
-        result["steer"] = float(np.clip(-angle * 1.25, -1.0, 1.0))
+        # A positive TORCS angle means the car points left; steer right to
+        # reduce the heading error instead of reinforcing it.
+        result["steer"] = float(np.clip(angle * 1.25, -1.0, 1.0))
         result["accel"] = 0.0
         result["brake"] = max(result["brake"], min(1.0, abs(angle)))
         reasons.append("heading_recovery")

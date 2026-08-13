@@ -45,7 +45,10 @@ def default_low_level_controller(
 
     lateral_error = float(sensors.get("trackPos", 0.0)) - intent.lateral_target
     heading_error = float(sensors.get("angle", 0.0))
-    steer = _clip(-(0.8 * lateral_error + 1.8 * heading_error), -1.0, 1.0)
+    # TORCS reports a positive heading error when the car points left of the
+    # track tangent, so the recovery steering term must be positive.  The
+    # lateral term keeps the signed track-position correction unchanged.
+    steer = _clip(-0.8 * lateral_error + 1.8 * heading_error, -1.0, 1.0)
     speed = float(sensors.get("speedX", 0.0))
     track = np.asarray(sensors.get("track", []), dtype=np.float32)
     valid_track = (

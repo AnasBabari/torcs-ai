@@ -84,9 +84,23 @@ class TorcsScrTransport:
         try:
             self.client = self._new_client()
             self.client.get_servers_input()
-        except Exception:
+        except Exception as first_error:
             self._close_client()
-            raise
+            # A completed native race can leave the owned TORCS process alive
+            # while its SCR listener has stopped accepting clients.  Restart
+            # only a session started by this transport, then make one bounded
+            # reconnect attempt; never search for or terminate external PIDs.
+            if not self._started_session:
+                raise
+            self.session.stop()
+            self._started_session = False
+            try:
+                self._ensure_session()
+                self.client = self._new_client()
+                self.client.get_servers_input()
+            except Exception as retry_error:
+                self._close_client()
+                raise first_error from retry_error
         self._steps = 0
         return self._snapshot(self.client)
 

@@ -6,7 +6,8 @@ from typing import Any, Mapping, Optional
 
 import numpy as np
 
-from torcs_ai.envs import RacingEnv
+from torcs_ai.envs import RacingEnv, default_low_level_controller
+from torcs_ai.controllers import TacticalIntent
 
 
 def _sensors(**overrides: Any) -> dict[str, Any]:
@@ -120,3 +121,11 @@ def test_racing_env_reports_safety_shield_intervention() -> None:
     assert "heading_recovery" in info["shield_reasons"]
     assert transport.controls[-1]["accel"] == 0.0
     env.close()
+
+
+def test_low_level_controller_steers_into_positive_heading_error() -> None:
+    controls = default_low_level_controller(
+        TacticalIntent(action_id=4, lateral_target=0.0, speed_fraction=0.85),
+        _sensors(angle=0.8, trackPos=0.0),
+    )
+    assert controls["steer"] > 0.0

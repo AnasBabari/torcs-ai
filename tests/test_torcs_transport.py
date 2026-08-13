@@ -89,3 +89,27 @@ def test_transport_requires_reset() -> None:
     transport = TorcsScrTransport(session)  # type: ignore[arg-type]
     with pytest.raises(RuntimeError):
         transport.step({"steer": 0.0})
+
+
+def test_transport_restarts_owned_session_after_connect_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = _FakeSession()
+    transport = TorcsScrTransport(session)  # type: ignore[arg-type]
+    attempts = 0
+
+    class _FlakyClient(_FakeClient):
+        def __init__(self, **kwargs: Any) -> None:
+            nonlocal attempts
+            attempts += 1
+            if attempts == 1:
+                raise TimeoutError("listener not ready")
+            super().__init__(**kwargs)
+
+    monkeypatch.setattr("torcs_ai.envs.torcs_transport.Client", _FlakyClient)
+    assert transport.reset() == {"speedX": 11.0}
+    assert attempts == 2
+    assert session.started == 2
+    assert session.stopped == 1
+    transport.close()
+    assert session.stopped == 2
