@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from .controllers import expert_tactical_action
-from .envs import RacingEnv, ScrTransportConfig, TorcsScrTransport
+from .envs import MultiTrackRacingEnv, RacingEnv, ScrTransportConfig, TorcsScrTransport
 from .runtime import (
     SessionConfig,
     TorcsInstallation,
@@ -127,6 +127,36 @@ def build_native_env(
         max_steps=max_steps,
         teacher_guidance=teacher_guidance,
     )
+
+
+def build_multi_track_env(
+    torcs_home: Path,
+    runtime_home: Path,
+    tracks: list[str] | tuple[str, ...],
+    *,
+    port: int = 3001,
+    max_steps: int = 100_000,
+    overwrite_runtime: bool = False,
+    teacher_guidance: float = 0.0,
+) -> MultiTrackRacingEnv:
+    """Build seeded per-track environments for one-at-a-time PPO training."""
+
+    unique_tracks = tuple(dict.fromkeys(tracks))
+    if not unique_tracks or any(not track.strip() for track in unique_tracks):
+        raise ValueError("tracks must contain at least one non-empty value")
+    environments = {
+        track: build_native_env(
+            torcs_home,
+            runtime_home / f"track-{index}",
+            port=port,
+            max_steps=max_steps,
+            track=track,
+            overwrite_runtime=overwrite_runtime,
+            teacher_guidance=teacher_guidance,
+        )
+        for index, track in enumerate(unique_tracks)
+    }
+    return MultiTrackRacingEnv(environments)
 
 
 def train_ppo(

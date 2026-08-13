@@ -8,7 +8,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from torcs_ai.rl import build_native_env, build_run_manifest, train_ppo, write_json_atomic
+from torcs_ai.rl import (
+    build_multi_track_env,
+    build_native_env,
+    build_run_manifest,
+    train_ppo,
+    write_json_atomic,
+)
 
 
 def main() -> int:
@@ -22,7 +28,12 @@ def main() -> int:
     parser.add_argument("--checkpoint-freq", type=int, default=10_000)
     parser.add_argument("--seed", type=int, default=7)
     parser.add_argument("--device", default="auto")
-    parser.add_argument("--track", default=None)
+    parser.add_argument(
+        "--track",
+        action="append",
+        dest="tracks",
+        help="approved track; repeat to train on a seeded track matrix",
+    )
     parser.add_argument("--overwrite-runtime", action="store_true")
     parser.add_argument("--max-steps", type=int, default=10_000)
     parser.add_argument("--n-steps", type=int, default=256)
@@ -36,14 +47,28 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    env = build_native_env(
-        args.torcs_home,
-        args.runtime_home,
-        max_steps=args.max_steps,
-        track=args.track,
-        overwrite_runtime=args.overwrite_runtime,
-        teacher_guidance=args.teacher_guidance,
-    )
+    tracks = args.tracks or []
+    if len(tracks) > 1:
+        env = build_multi_track_env(
+            args.torcs_home,
+            args.runtime_home,
+            tracks,
+            max_steps=args.max_steps,
+            overwrite_runtime=args.overwrite_runtime,
+            teacher_guidance=args.teacher_guidance,
+        )
+        manifest_track = "matrix"
+    else:
+        track = tracks[0] if tracks else None
+        env = build_native_env(
+            args.torcs_home,
+            args.runtime_home,
+            max_steps=args.max_steps,
+            track=track,
+            overwrite_runtime=args.overwrite_runtime,
+            teacher_guidance=args.teacher_guidance,
+        )
+        manifest_track = track
     try:
         train_ppo(
             env,
@@ -59,7 +84,7 @@ def main() -> int:
         manifest = build_run_manifest(
             args.torcs_home,
             role="train",
-            track=args.track,
+            track=manifest_track,
             max_steps=args.max_steps,
             teacher_guidance=args.teacher_guidance,
             seed=args.seed,
@@ -71,6 +96,7 @@ def main() -> int:
                 "batch_size": args.batch_size,
                 "learning_rate": args.learning_rate,
                 "teacher_guidance": args.teacher_guidance,
+                "tracks": tracks or [None],
                 "device": args.device,
                 "model_path": str(args.output.with_suffix(".zip")),
             },

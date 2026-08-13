@@ -128,6 +128,10 @@ python scripts\train_native_agent.py --timesteps 100000 --teacher-guidance 0.25 
 python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --episodes 3 --max-steps 10000
 # Track-specific runs use only the doctor-approved allowlist:
 python scripts\train_native_agent.py --track road/alpine-1 --timesteps 100000
+# Seeded multi-track training reuses one isolated runtime per track:
+python scripts\train_native_agent.py `
+  --track road/alpine-1 --track road/forza --track oval/michigan `
+  --timesteps 300000 --teacher-guidance 0.25 --output runs\ppo_matrix
 python scripts\benchmark_native.py --model runs\ppo_native.zip --track road/ruudskogen --episodes 3 --max-steps 10000
 # Matrix mode keeps one isolated runtime per track:
 python scripts\benchmark_native.py --model runs\ppo_native.zip `
