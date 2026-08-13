@@ -1,4 +1,4 @@
-"""Compare a saved policy with the deterministic center/hold baseline."""
+"""Compare a saved policy with deterministic center and tactical baselines."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from torcs_ai.rl import (  # noqa: E402
     build_native_env,
     build_run_manifest,
+    evaluate_expert,
     evaluate_fixed_action,
     evaluate_policy,
     write_json_atomic,
@@ -47,6 +48,18 @@ def main() -> int:
     finally:
         baseline_env.close()
 
+    expert_env = build_native_env(
+        args.torcs_home,
+        args.runtime_home / "expert",
+        max_steps=args.max_steps,
+        track=args.track,
+        overwrite_runtime=args.overwrite_runtime,
+    )
+    try:
+        expert = evaluate_expert(expert_env, episodes=args.episodes)
+    finally:
+        expert_env.close()
+
     model_env = build_native_env(
         args.torcs_home,
         args.runtime_home / "model",
@@ -65,6 +78,7 @@ def main() -> int:
         "episodes": args.episodes,
         "max_steps": args.max_steps,
         "baseline": baseline,
+        "expert": expert,
         "policy": learned,
         "comparison_rule": "learned policy must beat baseline on held-out runs; no claim from reward alone",
     }
@@ -73,7 +87,7 @@ def main() -> int:
         role="benchmark",
         track=args.track,
         max_steps=args.max_steps,
-        results={"baseline": baseline, "policy": learned},
+        results={"baseline": baseline, "expert": expert, "policy": learned},
     )
     if args.output is not None:
         print(f"benchmark artifact: {write_json_atomic(args.output, payload)}")

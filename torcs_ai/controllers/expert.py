@@ -1,0 +1,50 @@
+"""Deterministic tactical demonstrator used as a training/evaluation baseline."""
+
+from __future__ import annotations
+
+from typing import Any, Mapping
+
+import numpy as np
+
+from .actions import TacticalAction
+
+
+def _curvature_signal(sensors: Mapping[str, Any]) -> float:
+    track = np.asarray(sensors.get("track", []), dtype=np.float32)
+    if track.ndim != 1:
+        return 0.0
+    valid = track[np.isfinite(track) & (track >= 0.0)]
+    if valid.size < 5:
+        return 0.0
+    return float(np.clip(np.mean(np.abs(np.diff(valid))) / 80.0, 0.0, 1.0))
+
+
+def expert_tactical_action(sensors: Mapping[str, Any]) -> int:
+    """Choose a safe nine-action intent from current SCR telemetry.
+
+    This is deliberately deterministic and transparent. It is not counted as
+    learned performance; it supplies a reproducible teacher/baseline for
+    behavior-cloning and for diagnosing whether PPO has learned anything.
+    """
+
+    track_pos = float(sensors.get("trackPos", 0.0))
+    angle = float(sensors.get("angle", 0.0))
+    speed = float(sensors.get("speedX", 0.0))
+    curvature = _curvature_signal(sensors)
+    desired_steer = -(0.8 * track_pos + 1.8 * angle)
+    if desired_steer < -0.12:
+        lateral = 0
+    elif desired_steer > 0.12:
+        lateral = 2
+    else:
+        lateral = 1
+
+    target_speed = 300.0 * (1.0 - 0.55 * curvature)
+    target_speed *= 1.0 - min(abs(angle), 1.0) * 0.35
+    if speed > target_speed + 18.0 or abs(angle) > 0.55:
+        pace = 0
+    elif speed < target_speed - 25.0:
+        pace = 2
+    else:
+        pace = 1
+    return int(TacticalAction(lateral * 3 + pace))

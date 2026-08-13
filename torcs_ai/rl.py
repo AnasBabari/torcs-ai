@@ -13,6 +13,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .controllers import expert_tactical_action
 from .envs import RacingEnv, ScrTransportConfig, TorcsScrTransport
 from .runtime import (
     SessionConfig,
@@ -231,3 +232,17 @@ def evaluate_fixed_action(
             return action, None
 
     return evaluate_policy(env, _FixedPolicy(), episodes=episodes)
+
+
+def evaluate_expert(env: RacingEnv, *, episodes: int = 3) -> list[dict[str, Any]]:
+    """Evaluate the deterministic tactical teacher as a non-learned baseline."""
+
+    class _ExpertPolicy:
+        def predict(self, observation: Any, deterministic: bool = True) -> tuple[int, None]:
+            del deterministic
+            sensors = getattr(env, "_sensors", None)
+            if sensors is None:
+                raise RuntimeError("expert policy requires an active environment")
+            return expert_tactical_action(sensors), None
+
+    return evaluate_policy(env, _ExpertPolicy(), episodes=episodes)

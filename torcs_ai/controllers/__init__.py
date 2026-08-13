@@ -3,6 +3,7 @@
 from .actions import TacticalAction, TacticalIntent, decode_tactical_action
 from .actuator import DEFAULT_SLEW_RATES, apply_slew_limiter
 from .shield import ShieldResult, apply_safety_shield
+from .expert import expert_tactical_action
 
 __all__ = [
     "TacticalAction",
@@ -12,4 +13,5 @@ __all__ = [
     "apply_slew_limiter",
     "ShieldResult",
     "apply_safety_shield",
+    "expert_tactical_action",
 ]
