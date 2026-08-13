@@ -19,6 +19,21 @@ def _curvature_signal(sensors: Mapping[str, Any]) -> float:
     return float(np.clip(np.mean(np.abs(np.diff(valid))) / 80.0, 0.0, 1.0))
 
 
+def track_speed_limit(sensors: Mapping[str, Any]) -> float:
+    """Estimate a conservative speed ceiling from the forward track rays."""
+
+    track = np.asarray(sensors.get("track", []), dtype=np.float32)
+    if track.ndim != 1 or track.size < 11:
+        return 300.0
+    center = track[track.size // 2 - 2 : track.size // 2 + 3]
+    finite = center[np.isfinite(center) & (center >= 0.0)]
+    if finite.size < 3:
+        return 300.0
+    # A short forward horizon must lower the target before the car accumulates
+    # an unrecoverable heading error at the bend entry.
+    return float(np.clip(80.0 + 2.5 * float(np.min(finite)), 80.0, 300.0))
+
+
 def expert_tactical_action(sensors: Mapping[str, Any]) -> int:
     """Choose a safe nine-action intent from current SCR telemetry.
 
@@ -43,6 +58,7 @@ def expert_tactical_action(sensors: Mapping[str, Any]) -> int:
 
     target_speed = 300.0 * (1.0 - 0.55 * curvature)
     target_speed *= 1.0 - min(abs(angle), 1.0) * 0.35
+    target_speed = min(target_speed, track_speed_limit(sensors))
     if speed > target_speed + 18.0 or abs(angle) > 0.55:
         pace = 0
     elif speed < target_speed - 25.0:

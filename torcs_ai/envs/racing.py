@@ -21,6 +21,7 @@ from ..controllers import (
     apply_slew_limiter,
     decode_tactical_action,
     expert_tactical_action,
+    track_speed_limit,
 )
 from .telemetry import OBSERVATION_SIZE, TelemetryObservationEncoder, TelemetryValidationError
 
@@ -64,6 +65,7 @@ def default_low_level_controller(
         curvature = 0.0
     target_speed = 300.0 * intent.speed_fraction * (1.0 - 0.55 * curvature)
     target_speed *= 1.0 - min(abs(heading_error), 1.0) * 0.35
+    target_speed = min(target_speed, track_speed_limit(sensors))
     if speed > target_speed + 10.0:
         accel, brake = 0.0, _clip((speed - target_speed) / 60.0, 0.0, 1.0)
     else:

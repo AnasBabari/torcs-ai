@@ -1,6 +1,6 @@
 """Deterministic expert baseline tests."""
 
-from torcs_ai.controllers import TacticalAction, expert_tactical_action
+from torcs_ai.controllers import TacticalAction, expert_tactical_action, track_speed_limit
 
 
 def _sensors(**overrides):
@@ -30,3 +30,17 @@ def test_expert_brakes_for_large_heading_error() -> None:
 def test_expert_selects_right_recovery_for_positive_heading_error() -> None:
     action = expert_tactical_action(_sensors(angle=0.3, speedX=60.0))
     assert action in (TacticalAction.RIGHT_HOLD, TacticalAction.RIGHT_PUSH)
+
+
+def test_forward_track_rays_lower_speed_limit_before_a_bend() -> None:
+    assert track_speed_limit(_sensors(track=[12.0] * 19)) == 110.0
+    assert track_speed_limit(_sensors(track=[200.0] * 19)) == 300.0
+
+
+def test_expert_brakes_when_forward_track_distance_is_short() -> None:
+    action = expert_tactical_action(_sensors(speedX=150.0, track=[12.0] * 19))
+    assert action in (
+        TacticalAction.LEFT_BRAKE,
+        TacticalAction.CENTER_BRAKE,
+        TacticalAction.RIGHT_BRAKE,
+    )
