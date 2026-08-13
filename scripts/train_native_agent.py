@@ -41,6 +41,12 @@ def main() -> int:
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
     parser.add_argument(
+        "--target-kl",
+        type=float,
+        default=0.02,
+        help="stop a PPO optimizer epoch when policy KL drift exceeds this target",
+    )
+    parser.add_argument(
         "--teacher-guidance",
         type=float,
         default=0.0,
@@ -52,11 +58,28 @@ def main() -> int:
     parser.add_argument("--bc-batch-size", type=int, default=256)
     parser.add_argument("--bc-learning-rate", type=float, default=1e-3)
     parser.add_argument(
+        "--simulator-timeout-seconds",
+        type=float,
+        default=30.0,
+        help=(
+            "maximum TORCS wait for the next action; training needs a longer "
+            "deadline than inference while PPO performs gradient updates"
+        ),
+    )
+    parser.add_argument(
         "--allow-smoke-training",
         action="store_true",
         help="permit deliberately short runs that cannot support competitiveness claims",
     )
     args = parser.parse_args()
+
+    if args.simulator_timeout_seconds <= 0.0:
+        parser.error("--simulator-timeout-seconds must be positive")
+    if args.target_kl <= 0.0:
+        parser.error("--target-kl must be positive")
+    simulator_timeout_microseconds = int(
+        args.simulator_timeout_seconds * 1_000_000
+    )
 
     tracks = args.tracks or []
     track_count = max(1, len(dict.fromkeys(tracks)))
@@ -77,6 +100,7 @@ def main() -> int:
             max_steps=args.max_steps,
             overwrite_runtime=args.overwrite_runtime,
             teacher_guidance=args.teacher_guidance,
+            simulator_timeout_microseconds=simulator_timeout_microseconds,
         )
         manifest_track = "matrix"
     else:
@@ -88,6 +112,7 @@ def main() -> int:
             track=track,
             overwrite_runtime=args.overwrite_runtime,
             teacher_guidance=args.teacher_guidance,
+            simulator_timeout_microseconds=simulator_timeout_microseconds,
         )
         manifest_track = track
     try:
@@ -109,6 +134,7 @@ def main() -> int:
             n_steps=args.n_steps,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
+            target_kl=args.target_kl,
             demonstrations=demonstrations,
             bc_epochs=args.bc_epochs,
             bc_batch_size=args.bc_batch_size,
@@ -129,9 +155,11 @@ def main() -> int:
                 "n_steps": args.n_steps,
                 "batch_size": args.batch_size,
                 "learning_rate": args.learning_rate,
+                "target_kl": args.target_kl,
                 "teacher_guidance": args.teacher_guidance,
                 "tracks": tracks or [None],
                 "device": args.device,
+                "simulator_timeout_seconds": args.simulator_timeout_seconds,
                 "model_path": str(args.output.with_suffix(".zip")),
                 "expert_episodes": args.expert_episodes,
                 "expert_stride": args.expert_stride,

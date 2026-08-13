@@ -165,6 +165,16 @@ collects complete teacher races, balances the nine tactical classes, records
 its action counts and training accuracy, and then lets PPO optimize the v3
 progress/position/safety reward. Evaluation remains teacher-free.
 
+Native training gives TORCS a 30-second action-response deadline by default
+(`--simulator-timeout-seconds`). This is intentionally longer than the
+inference deadline because PPO pauses environment stepping while it performs
+gradient updates. Lowering it to the historical 100 ms can make TORCS drop the
+SCR client between rollouts and prevent a long training run from progressing.
+PPO also uses a conservative `--target-kl 0.02` optimizer early-stop so a
+single rollout cannot move the learned policy too far from its expert warm
+start. The value is recorded in the run manifest and must be tuned using the
+held-out native track matrix rather than training reward alone.
+
 The low-level controller uses an explicit, manifest-recorded driving profile.
 The generic forward-ray speed envelope is used for Alpine and Michigan. Forza
 uses a calibrated short-horizon hairpin brake floor (`speed_limit_scale=0.72`)

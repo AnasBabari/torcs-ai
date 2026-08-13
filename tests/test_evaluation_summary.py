@@ -1,6 +1,10 @@
 """Tests for auditable policy aggregation and competitiveness gates."""
 
-from torcs_ai.rl import compare_with_expert, summarize_evaluation
+from pathlib import Path
+
+import pytest
+
+from torcs_ai.rl import compare_with_expert, summarize_evaluation, train_ppo
 
 
 def _episode(*, action: int, damage_per_km: float = 10.0, steps: int = 100) -> dict:
@@ -32,3 +36,8 @@ def test_competitiveness_requires_diversity_damage_and_pace() -> None:
     assert result["competitive"]
     collapsed = summarize_evaluation([_episode(action=5, steps=99)])
     assert not compare_with_expert(collapsed, expert)["competitive"]
+
+
+def test_training_rejects_nonpositive_target_kl() -> None:
+    with pytest.raises(ValueError, match="target_kl"):
+        train_ppo(object(), Path("unused"), target_kl=0.0)  # type: ignore[arg-type]

@@ -143,8 +143,12 @@ def build_native_env(
     overwrite_runtime: bool = False,
     teacher_guidance: float = 0.0,
     text_only: bool = True,
+    simulator_timeout_microseconds: int = 100_000,
 ) -> RacingEnv:
     """Build one explicit native environment from an immutable installation."""
+
+    if simulator_timeout_microseconds < 1:
+        raise ValueError("simulator_timeout_microseconds must be positive")
 
     session = TorcsSession(
         TorcsInstallation(torcs_home),
@@ -156,6 +160,7 @@ def build_native_env(
                 else r"config\raceman\quickrace.xml"
             ),
             text_only=text_only,
+            timeout_microseconds=simulator_timeout_microseconds,
         ),
     )
     session.prepare(overwrite=overwrite_runtime)
@@ -193,6 +198,7 @@ def build_multi_track_env(
     max_steps: int = 100_000,
     overwrite_runtime: bool = False,
     teacher_guidance: float = 0.0,
+    simulator_timeout_microseconds: int = 100_000,
 ) -> MultiTrackRacingEnv:
     """Build seeded per-track environments for one-at-a-time PPO training."""
 
@@ -208,6 +214,7 @@ def build_multi_track_env(
             track=track,
             overwrite_runtime=overwrite_runtime,
             teacher_guidance=teacher_guidance,
+            simulator_timeout_microseconds=simulator_timeout_microseconds,
         )
         for index, track in enumerate(unique_tracks)
     }
@@ -225,6 +232,7 @@ def train_ppo(
     n_steps: int = 256,
     batch_size: int = 64,
     learning_rate: float = 3e-4,
+    target_kl: float | None = 0.02,
     demonstrations: ExpertDemonstrations | None = None,
     bc_epochs: int = 8,
     bc_batch_size: int = 256,
@@ -238,6 +246,8 @@ def train_ppo(
         raise ValueError("batch_size cannot exceed n_steps")
     if learning_rate <= 0.0:
         raise ValueError("learning_rate must be positive")
+    if target_kl is not None and target_kl <= 0.0:
+        raise ValueError("target_kl must be positive when provided")
     try:
         from stable_baselines3 import PPO
         from stable_baselines3.common.callbacks import CheckpointCallback
@@ -260,6 +270,7 @@ def train_ppo(
         n_steps=n_steps,
         batch_size=batch_size,
         learning_rate=learning_rate,
+        target_kl=target_kl,
         policy_kwargs={"net_arch": [256, 256]},
     )
     model._torcs_bc_summary = None
