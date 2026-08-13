@@ -8,6 +8,7 @@ Features advanced neural networks, automated training, real-time visualization, 
 
 import sys
 import logging
+import time
 from typing import Optional
 
 # Configure logging
@@ -143,7 +144,8 @@ def main():
     else:
         # Run racing mode (default)
         logger.info("🏎️ Starting Advanced Machine Learning Racing AI...")
-        logger.info("🤖 Neural Networks: LOADED"        logger.info("📊 Real-time Analytics: ENABLED")
+        logger.info("🤖 Neural Networks: LOADED")
+        logger.info("📊 Real-time Analytics: ENABLED")
         logger.info("🎯 Target: Ultimate racing performance with continuous learning")
 
         try:

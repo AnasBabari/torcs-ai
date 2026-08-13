@@ -53,10 +53,12 @@ def automated_training_pipeline(num_races: int = 10, max_steps_per_race: int = 5
     logger.info("🚀 Starting Automated Training Pipeline")
     logger.info(f"🎯 Target: {num_races} races, {max_steps_per_race} steps each")
 
-    # Auto-start TORCS server
+    # Check TORCS server (manual startup required)
     if not start_torcs_server():
-        logger.error("❌ Cannot start training without TORCS server")
-        return {}
+        logger.info("⏳ Please start TORCS manually using the instructions above")
+        logger.info("   Once TORCS is running and shows 'Waiting for request on port 3001',")
+        logger.info("   press Enter to continue with training...")
+        input()  # Wait for user confirmation
 
     # Track training progress
     training_stats = {

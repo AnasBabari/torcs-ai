@@ -3018,10 +3018,7 @@ if __name__ == "__main__":
             print("python torcs_jm_par.py help         # Show this help")
             print("="*50)
             
-        else:
-            print("❌ Unknown command. Use 'python torcs_jm_par.py demo' for options.")
-            
-elif sys.argv[1] == 'autostart':
+        elif sys.argv[1] == 'autostart':
             # Auto-start mode - run single race with TORCS auto-start
             print("🚀 Starting TORCS ML Racing AI with auto-start...")
             print("🤖 ML Models:", "LOADED" if ml_racing_ai.is_trained else "TRAINING")
@@ -3058,3 +3055,55 @@ elif sys.argv[1] == 'autostart':
             analyze_ml_models()
             generate_racing_insights()
             print("="*60)
+            
+        else:
+            print("❌ Unknown command. Use 'python torcs_jm_par.py demo' for options.")
+    
+    else:
+        # Default mode - run single race with manual TORCS start
+        print("🚀 Starting TORCS ML Racing AI (manual TORCS start required)...")
+        print("🤖 ML Models:", "LOADED" if ml_racing_ai.is_trained else "TRAINING")
+        print("📊 Data collection and visualization: ENABLED")
+        print("🎯 Target: Ultimate racing performance with continuous learning")
+        print()
+        print("📋 MANUAL TORCS STARTUP REQUIRED:")
+        print("   1. Open a new terminal/command prompt")
+        print("   2. Navigate to TORCS installation directory")
+        print("   3. Set environment: set SDL_VIDEODRIVER=windib")
+        print("   4. Start TORCS: torcs -t 100000")
+        print("   5. Select 'New Race' → 'Quick Race' → 'Configure Race'")
+        print("   6. Set 'Opponent' to 'null' (no opponents)")
+        print("   7. Return here and press Enter to continue...")
+        print("="*60)
+        
+        input("Press Enter when TORCS is ready...")
+        
+        C = Client(p=3001, auto_start=False)
+        for step in range(C.maxSteps, 0, -1):
+            C.get_servers_input()
+
+            # Check if connection is still active after get_servers_input
+            if not C.so:
+                print("⚠️  Connection lost, attempting to reconnect...")
+                try:
+                    C.setup_connection()
+                    print("✅ Reconnected successfully, continuing race...")
+                except Exception as e:
+                    print(f"❌ Failed to reconnect: {e}")
+                    break
+
+            drive_modular(C)
+            C.respond_to_server()
+
+            # Periodic analysis
+            if step % 1000 == 0:
+                print(f"Step {C.maxSteps - step}/{C.maxSteps} - AI learning and adapting...")
+
+        C.shutdown()
+        
+        # Final analysis
+        print("\n" + "="*60)
+        print("🏁 RACE COMPLETE - Generating final analysis...")
+        analyze_ml_models()
+        generate_racing_insights()
+        print("="*60)

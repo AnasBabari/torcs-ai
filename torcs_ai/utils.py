@@ -18,40 +18,26 @@ logger = logging.getLogger(__name__)
 
 def start_torcs_server() -> bool:
     """
-    Automatically start TORCS server for training.
+    Provide instructions for starting TORCS server manually.
+
+    Since TORCS has display dependency issues in automated environments,
+    it's more reliable to start it manually.
 
     Returns:
-        True if server started successfully, False otherwise
+        Always returns False to indicate manual startup is required
     """
-    logger.info("🚀 Starting TORCS server automatically...")
+    logger.info("🔧 TORCS Manual Startup Required:")
+    logger.info("   1. Open Command Prompt as Administrator")
+    logger.info("   2. Navigate to: C:\\torcs\\torcs\\")
+    logger.info("   3. Run: set SDL_VIDEODRIVER=windib")
+    logger.info("   4. Run: wtorcs.exe -r config\\raceman\\quickrace.xml")
+    logger.info("   5. Wait for 'Waiting for request on port 3001' message")
+    logger.info("   6. Then run your AI training script")
+    logger.info("")
+    logger.info("💡 Alternative single command:")
+    logger.info("   set SDL_VIDEODRIVER=windib && wtorcs.exe -r config\\raceman\\quickrace.xml")
 
-    if platform.system() == 'Windows':
-        torcs_path = r'C:\torcs\torcs\wtorcs.exe'
-        if os.path.exists(torcs_path):
-            try:
-                # Start TORCS in background
-                subprocess.Popen([torcs_path, '-r', 'quickrace'],
-                               creationflags=subprocess.CREATE_NO_WINDOW)
-                logger.info("✅ TORCS server started successfully")
-                time.sleep(3)  # Give TORCS time to start
-                return True
-            except Exception as e:
-                logger.error(f"❌ Failed to start TORCS: {e}")
-                return False
-        else:
-            logger.error(f"❌ TORCS not found at {torcs_path}")
-            logger.error("   Please install TORCS in C:\\torcs\\torcs\\")
-            return False
-    else:
-        # Linux/Mac commands
-        try:
-            os.system('torcs -nofuel -nodamage -nolaptime &')
-            time.sleep(2)
-            logger.info("✅ TORCS server started successfully")
-            return True
-        except Exception as e:
-            logger.error("❌ Failed to start TORCS on Linux/Mac")
-            return False
+    return False  # Manual startup required
 
 
 def analyze_ml_models() -> None:
