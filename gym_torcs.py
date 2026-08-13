@@ -47,10 +47,13 @@ class TorcsEnv:
 
         obs = client.S.d  # Get the current full-observation from torcs
         """
-        if throttle is False:
-            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(1,))
-        else:
-            self.action_space = spaces.Box(low=-1.0, high=1.0, shape=(2,))
+        action_dimensions = 1 + int(self.throttle) + int(self.gear_change)
+        action_low = np.full(action_dimensions, -1.0, dtype=np.float32)
+        action_high = np.full(action_dimensions, 1.0, dtype=np.float32)
+        if self.gear_change:
+            action_low[-1] = 1.0
+            action_high[-1] = 6.0
+        self.action_space = spaces.Box(low=action_low, high=action_high, dtype=np.float32)
 
         if vision is False:
             high = np.array([1., np.inf, np.inf, np.inf, 1., np.inf, 1., np.inf])
@@ -219,7 +222,8 @@ class TorcsEnv:
             torcs_action.update({'accel': u[1]})
 
         if self.gear_change is True: # gear change action is enabled
-            torcs_action.update({'gear': u[2]})
+            gear_index = 2 if self.throttle else 1
+            torcs_action.update({'gear': u[gear_index]})
 
         return torcs_action
 
