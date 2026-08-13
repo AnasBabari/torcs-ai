@@ -1,5 +1,9 @@
-import gym
-from gym import spaces
+try:
+    import gymnasium as gym
+    from gymnasium import spaces
+except ImportError:  # pragma: no cover - legacy environments may still provide Gym
+    import gym
+    from gym import spaces
 import numpy as np
 # from os import path
 import snakeoil3_gym as snakeoil3
