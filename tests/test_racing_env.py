@@ -129,3 +129,14 @@ def test_low_level_controller_steers_into_positive_heading_error() -> None:
         _sensors(angle=0.8, trackPos=0.0),
     )
     assert controls["steer"] > 0.0
+
+
+def test_teacher_guidance_is_explicit_and_audited() -> None:
+    env = RacingEnv(FakeTransport(), max_steps=1, teacher_guidance=0.25)
+    env.reset()
+    _, reward, _, _, info = env.step(4)
+    assert info["teacher_action"] == 5
+    assert info["teacher_guidance"] == 0.25
+    assert info["reward_components"]["teacher_guidance"] == -0.25
+    assert 0.0 < reward < 1.0
+    env.close()

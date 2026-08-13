@@ -24,7 +24,7 @@ from .runtime import (
 )
 
 ACTION_SCHEMA_VERSION = "tactical-9-v1"
-REWARD_SCHEMA_VERSION = "progress-position-safety-v1"
+REWARD_SCHEMA_VERSION = "progress-position-safety-teacher-v2"
 
 
 def build_run_manifest(
@@ -36,11 +36,14 @@ def build_run_manifest(
     seed: int | None = None,
     training: dict[str, Any] | None = None,
     results: Any = None,
+    teacher_guidance: float = 0.0,
 ) -> dict[str, Any]:
     """Build a reproducibility record for a train/evaluate/benchmark run."""
 
     if not role.strip() or max_steps < 1:
         raise ValueError("role cannot be empty and max_steps must be positive")
+    if not 0.0 <= teacher_guidance <= 1.0:
+        raise ValueError("teacher_guidance must be within [0, 1]")
     manifest = inspect_installation(TorcsInstallation(torcs_home)).to_dict()
     dependency_versions: dict[str, str] = {}
     for package in ("numpy", "torch", "gymnasium", "stable-baselines3"):
@@ -64,6 +67,7 @@ def build_run_manifest(
             "reward_schema": REWARD_SCHEMA_VERSION,
             "track": track,
             "max_steps": max_steps,
+            "teacher_guidance": teacher_guidance,
         },
     }
     if seed is not None:
@@ -96,6 +100,7 @@ def build_native_env(
     max_steps: int = 100_000,
     track: str | None = None,
     overwrite_runtime: bool = False,
+    teacher_guidance: float = 0.0,
 ) -> RacingEnv:
     """Build one explicit native environment from an immutable installation."""
 
@@ -117,7 +122,11 @@ def build_native_env(
         session,
         config=ScrTransportConfig(port=port, max_steps=max_steps),
     )
-    return RacingEnv(transport, max_steps=max_steps)
+    return RacingEnv(
+        transport,
+        max_steps=max_steps,
+        teacher_guidance=teacher_guidance,
+    )
 
 
 def train_ppo(

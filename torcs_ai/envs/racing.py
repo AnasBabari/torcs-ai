@@ -20,6 +20,7 @@ from ..controllers import (
     apply_safety_shield,
     apply_slew_limiter,
     decode_tactical_action,
+    expert_tactical_action,
 )
 from .telemetry import OBSERVATION_SIZE, TelemetryObservationEncoder, TelemetryValidationError
 
@@ -100,14 +101,18 @@ if gym is not None:
             controller: Callable[[TacticalIntent, Mapping[str, Any]], Mapping[str, float]] = default_low_level_controller,
             safety_shield: bool = True,
             slew_rates: Optional[Mapping[str, float]] = None,
+            teacher_guidance: float = 0.0,
         ) -> None:
             if max_steps < 1:
                 raise ValueError("max_steps must be positive")
+            if not np.isfinite(teacher_guidance) or not 0.0 <= teacher_guidance <= 1.0:
+                raise ValueError("teacher_guidance must be finite and within [0, 1]")
             self.transport = transport
             self.max_steps = max_steps
             self.controller = controller
             self.safety_shield = safety_shield
             self.slew_rates = dict(slew_rates or DEFAULT_SLEW_RATES)
+            self.teacher_guidance = float(teacher_guidance)
             self.observation_space = spaces.Box(
                 low=-1.0,
                 high=1.0,
@@ -178,6 +183,14 @@ if gym is not None:
             self._sensors = next_sensors
             self._step_count += 1
             reward, components = self._reward(previous, next_sensors, controls)
+            teacher_action = expert_tactical_action(previous)
+            teacher_term = 0.0
+            if self.teacher_guidance:
+                teacher_term = self.teacher_guidance * (
+                    1.0 if intent.action_id == teacher_action else -1.0
+                )
+                components["teacher_guidance"] = teacher_term
+                reward += teacher_term
             terminated, termination_reason = self._termination(next_sensors)
             truncated = self._step_count >= self.max_steps and not terminated
             if truncated:
@@ -186,6 +199,8 @@ if gym is not None:
                 "termination_reason": termination_reason,
                 "reward_components": components,
                 "tactical_action": intent.action_id,
+                "teacher_action": teacher_action,
+                "teacher_guidance": self.teacher_guidance,
                 "controls": controls,
                 "policy_controls": policy_controls,
                 "slew_limited": slew_limited,

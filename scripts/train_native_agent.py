@@ -28,6 +28,12 @@ def main() -> int:
     parser.add_argument("--n-steps", type=int, default=256)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
+    parser.add_argument(
+        "--teacher-guidance",
+        type=float,
+        default=0.0,
+        help="optional expert-action reward coefficient in [0, 1]",
+    )
     args = parser.parse_args()
 
     env = build_native_env(
@@ -36,6 +42,7 @@ def main() -> int:
         max_steps=args.max_steps,
         track=args.track,
         overwrite_runtime=args.overwrite_runtime,
+        teacher_guidance=args.teacher_guidance,
     )
     try:
         train_ppo(
@@ -54,6 +61,7 @@ def main() -> int:
             role="train",
             track=args.track,
             max_steps=args.max_steps,
+            teacher_guidance=args.teacher_guidance,
             seed=args.seed,
             training={
                 "algorithm": "PPO",
@@ -62,6 +70,7 @@ def main() -> int:
                 "n_steps": args.n_steps,
                 "batch_size": args.batch_size,
                 "learning_rate": args.learning_rate,
+                "teacher_guidance": args.teacher_guidance,
                 "device": args.device,
                 "model_path": str(args.output.with_suffix(".zip")),
             },

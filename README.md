@@ -123,6 +123,8 @@ The first real-policy path is explicit and bounded:
 
 ```powershell
 python scripts\train_native_agent.py --timesteps 100000 --max-steps 10000 --output runs\ppo_native
+# Optional warm start from the audited tactical teacher:
+python scripts\train_native_agent.py --timesteps 100000 --teacher-guidance 0.25 --output runs\ppo_teacher
 python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --episodes 3 --max-steps 10000
 # Track-specific runs use only the doctor-approved allowlist:
 python scripts\train_native_agent.py --track road/alpine-1 --timesteps 100000
@@ -133,6 +135,11 @@ These commands require the `rl` extra, stage a private runtime copy, and close
 the simulator they started. They do not claim competitiveness until a frozen
 benchmark report compares completion, pace, damage, and position outcomes to
 the fixed-driver baseline.
+
+Teacher guidance is an explicit training-only reward term: it rewards matching
+the deterministic telemetry-driven tactical controller and records its
+coefficient in the run manifest. Benchmark environments disable guidance, so
+reported learned-policy results remain independent of the teacher reward.
 
 ## Evaluation policy
 
