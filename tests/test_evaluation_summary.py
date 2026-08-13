@@ -1,0 +1,34 @@
+"""Tests for auditable policy aggregation and competitiveness gates."""
+
+from torcs_ai.rl import compare_with_expert, summarize_evaluation
+
+
+def _episode(*, action: int, damage_per_km: float = 10.0, steps: int = 100) -> dict:
+    counts = [0] * 9
+    counts[action] = steps
+    return {
+        "finish": True,
+        "steps": steps,
+        "race_position": 1,
+        "damage_per_km": damage_per_km,
+        "mean_speed_x": 100.0,
+        "teacher_agreement_rate": 0.8,
+        "action_counts": counts,
+    }
+
+
+def test_summary_surfaces_single_action_collapse() -> None:
+    summary = summarize_evaluation([_episode(action=5)])
+    assert summary["action_collapsed"]
+    assert summary["dominant_action_share"] == 1.0
+
+
+def test_competitiveness_requires_diversity_damage_and_pace() -> None:
+    expert = summarize_evaluation([_episode(action=4, steps=100)])
+    policy = summarize_evaluation(
+        [_episode(action=2, steps=100), _episode(action=8, steps=100)]
+    )
+    result = compare_with_expert(policy, expert)
+    assert result["competitive"]
+    collapsed = summarize_evaluation([_episode(action=5, steps=99)])
+    assert not compare_with_expert(collapsed, expert)["competitive"]

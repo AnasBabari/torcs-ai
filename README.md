@@ -122,9 +122,11 @@ authoritative runtime checks.
 The first real-policy path is explicit and bounded:
 
 ```powershell
-python scripts\train_native_agent.py --timesteps 100000 --max-steps 10000 --output runs\ppo_native
+python scripts\train_native_agent.py --timesteps 100000 --max-steps 15000 --output runs\ppo_native
 # Optional warm start from the audited tactical teacher:
-python scripts\train_native_agent.py --timesteps 100000 --teacher-guidance 0.25 --output runs\ppo_teacher
+python scripts\train_native_agent.py --timesteps 100000 --max-steps 15000 `
+  --expert-episodes 1 --bc-epochs 8 --teacher-guidance 0.25 `
+  --output runs\ppo_teacher
 python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --episodes 3 --max-steps 10000
 # Add --visual to watch the PPO model drive the TORCS window:
 python scripts\evaluate_native_agent.py --model runs\ppo_native.zip --track road/forza --episodes 1 --max-steps 15000 --visual
@@ -133,7 +135,8 @@ python scripts\train_native_agent.py --track road/alpine-1 --timesteps 100000
 # Seeded multi-track training reuses one isolated runtime per track:
 python scripts\train_native_agent.py `
   --track road/alpine-1 --track road/forza --track oval/michigan `
-  --timesteps 300000 --teacher-guidance 0.25 --output runs\ppo_matrix
+  --timesteps 300000 --max-steps 15000 --expert-episodes 1 `
+  --bc-epochs 8 --teacher-guidance 0.25 --output runs\ppo_matrix
 python scripts\benchmark_native.py --model runs\ppo_native.zip --track road/ruudskogen --episodes 3 --max-steps 10000
 # Matrix mode keeps one isolated runtime per track:
 python scripts\benchmark_native.py --model runs\ppo_native.zip `
@@ -152,6 +155,15 @@ coefficient in the run manifest. Benchmark environments disable guidance, so
 reported learned-policy results remain independent of the teacher reward.
 Repeated `--track` arguments produce a matrix artifact while retaining the
 single-track fields for existing consumers.
+
+Competitive training rejects short episode horizons and insufficient total
+experience by default. A multi-track run must permit at least 5,000 steps per
+episode and allocate at least one maximum-length episode per selected track.
+`--allow-smoke-training` exists only for transport/CI smoke checks and its
+artifacts are not competitive evidence. The behavioural-cloning warm start
+collects complete teacher races, balances the nine tactical classes, records
+its action counts and training accuracy, and then lets PPO optimize the v3
+progress/position/safety reward. Evaluation remains teacher-free.
 
 The low-level controller uses an explicit, manifest-recorded driving profile.
 The generic forward-ray speed envelope is used for Alpine and Michigan. Forza
@@ -172,6 +184,8 @@ reports:
 - off-track events, collision events, and damage per kilometre;
 - clean overtakes and lost positions;
 - safety-shield interventions per kilometre;
+- action distribution, dominant-action share, teacher agreement, and an
+  explicit action-collapse flag;
 - p50/p95 inference latency; and
 - bootstrap confidence intervals over independent seeds.
 

@@ -15,6 +15,7 @@ from torcs_ai.rl import (
     train_ppo,
     write_json_atomic,
 )
+from torcs_ai.imitation import collect_expert_demonstrations
 
 
 def main() -> int:
@@ -35,7 +36,7 @@ def main() -> int:
         help="approved track; repeat to train on a seeded track matrix",
     )
     parser.add_argument("--overwrite-runtime", action="store_true")
-    parser.add_argument("--max-steps", type=int, default=10_000)
+    parser.add_argument("--max-steps", type=int, default=15_000)
     parser.add_argument("--n-steps", type=int, default=256)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--learning-rate", type=float, default=3e-4)
@@ -45,9 +46,29 @@ def main() -> int:
         default=0.0,
         help="optional expert-action reward coefficient in [0, 1]",
     )
+    parser.add_argument("--expert-episodes", type=int, default=0)
+    parser.add_argument("--expert-stride", type=int, default=2)
+    parser.add_argument("--bc-epochs", type=int, default=8)
+    parser.add_argument("--bc-batch-size", type=int, default=256)
+    parser.add_argument("--bc-learning-rate", type=float, default=1e-3)
+    parser.add_argument(
+        "--allow-smoke-training",
+        action="store_true",
+        help="permit deliberately short runs that cannot support competitiveness claims",
+    )
     args = parser.parse_args()
 
     tracks = args.tracks or []
+    track_count = max(1, len(dict.fromkeys(tracks)))
+    if not args.allow_smoke_training:
+        if args.max_steps < 5_000:
+            parser.error("competitive training requires --max-steps >= 5000")
+        if args.timesteps < args.max_steps * track_count:
+            parser.error(
+                "competitive training must cover at least one maximum-length "
+                "episode per selected track; increase --timesteps or use "
+                "--allow-smoke-training for a non-competitive smoke run"
+            )
     if len(tracks) > 1:
         env = build_multi_track_env(
             args.torcs_home,
@@ -70,7 +91,15 @@ def main() -> int:
         )
         manifest_track = track
     try:
-        train_ppo(
+        demonstrations = None
+        if args.expert_episodes:
+            demonstrations = collect_expert_demonstrations(
+                env,
+                episodes_per_track=args.expert_episodes,
+                sample_stride=args.expert_stride,
+                seed=args.seed,
+            )
+        model = train_ppo(
             env,
             args.output,
             total_timesteps=args.timesteps,
@@ -80,7 +109,12 @@ def main() -> int:
             n_steps=args.n_steps,
             batch_size=args.batch_size,
             learning_rate=args.learning_rate,
+            demonstrations=demonstrations,
+            bc_epochs=args.bc_epochs,
+            bc_batch_size=args.bc_batch_size,
+            bc_learning_rate=args.bc_learning_rate,
         )
+        bc_summary = getattr(model, "_torcs_bc_summary", None)
         manifest = build_run_manifest(
             args.torcs_home,
             role="train",
@@ -99,6 +133,9 @@ def main() -> int:
                 "tracks": tracks or [None],
                 "device": args.device,
                 "model_path": str(args.output.with_suffix(".zip")),
+                "expert_episodes": args.expert_episodes,
+                "expert_stride": args.expert_stride,
+                "behavior_cloning": bc_summary,
             },
         )
         manifest_path = write_json_atomic(

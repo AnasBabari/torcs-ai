@@ -215,6 +215,9 @@ if gym is not None:
                 components["teacher_guidance"] = teacher_term
                 reward += teacher_term
             terminated, termination_reason = self._termination(next_sensors)
+            if terminated and termination_reason != "race_finished":
+                components["terminal_failure_penalty"] = 100.0
+                reward -= components["terminal_failure_penalty"]
             truncated = self._step_count >= self.max_steps and not terminated
             if truncated:
                 termination_reason = "max_steps"
@@ -259,16 +262,21 @@ if gym is not None:
                 -2.0,
                 2.0,
             )
-            track_penalty = 0.2 * abs(float(current.get("trackPos", 0.0)))
-            angle_penalty = 0.1 * abs(float(current.get("angle", 0.0)))
-            lateral_penalty = 0.05 * abs(float(current.get("speedY", 0.0))) / 50.0
+            track_position = abs(float(current.get("trackPos", 0.0)))
+            track_penalty = 0.35 * track_position * track_position
+            angle_penalty = 0.2 * abs(float(current.get("angle", 0.0)))
+            lateral_penalty = 0.02 * abs(float(current.get("speedY", 0.0)))
             damage_delta = max(
                 0.0,
                 float(current.get("damage", 0.0)) - float(previous.get("damage", 0.0)),
             )
-            damage_penalty = 2.0 * min(damage_delta / 1000.0, 1.0)
+            # Damage used to cost at most two reward points, making a 946-point
+            # collision almost irrelevant beside a full race's progress. Keep
+            # the incremental signal bounded, but large enough to affect the
+            # policy and value targets.
+            damage_penalty = min(0.1 * damage_delta, 100.0)
             finish_bonus = (
-                10.0
+                100.0
                 if bool(current.get("finished", False))
                 or bool(current.get("raceFinished", False))
                 else 0.0

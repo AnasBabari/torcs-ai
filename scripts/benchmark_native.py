@@ -13,9 +13,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from torcs_ai.rl import (  # noqa: E402
     build_native_env,
     build_run_manifest,
+    compare_with_expert,
     evaluate_expert,
     evaluate_fixed_action,
     evaluate_policy,
+    summarize_evaluation,
     write_json_atomic,
 )
 
@@ -71,6 +73,11 @@ def benchmark_track(args: argparse.Namespace, track: str | None) -> dict[str, ob
     finally:
         model_env.close()
 
+    summaries = {
+        "baseline": summarize_evaluation(baseline),
+        "expert": summarize_evaluation(expert),
+        "policy": summarize_evaluation(learned),
+    }
     return {
         "track": track,
         "episodes": args.episodes,
@@ -78,6 +85,10 @@ def benchmark_track(args: argparse.Namespace, track: str | None) -> dict[str, ob
         "baseline": baseline,
         "expert": expert,
         "policy": learned,
+        "summaries": summaries,
+        "competitiveness": compare_with_expert(
+            summaries["policy"], summaries["expert"]
+        ),
         "comparison_rule": (
             "learned policy must beat the fixed baseline on held-out runs; "
             "no claim from reward alone"

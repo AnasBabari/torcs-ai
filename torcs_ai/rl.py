@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import math
 import platform
+import statistics
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,7 @@ from .envs import (
     TorcsScrTransport,
     default_low_level_controller,
 )
+from .imitation import ExpertDemonstrations, behavior_clone_ppo_policy
 from .runtime import (
     SessionConfig,
     TorcsInstallation,
@@ -34,7 +37,7 @@ from .runtime import (
 )
 
 ACTION_SCHEMA_VERSION = "tactical-9-v1"
-REWARD_SCHEMA_VERSION = "progress-position-safety-teacher-v2"
+REWARD_SCHEMA_VERSION = "progress-position-safety-teacher-v3"
 
 
 def build_run_manifest(
@@ -222,6 +225,10 @@ def train_ppo(
     n_steps: int = 256,
     batch_size: int = 64,
     learning_rate: float = 3e-4,
+    demonstrations: ExpertDemonstrations | None = None,
+    bc_epochs: int = 8,
+    bc_batch_size: int = 256,
+    bc_learning_rate: float = 1e-3,
 ) -> Any:
     """Train a PPO policy with bounded, explicit native-environment ownership."""
 
@@ -255,6 +262,21 @@ def train_ppo(
         learning_rate=learning_rate,
         policy_kwargs={"net_arch": [256, 256]},
     )
+    model._torcs_bc_summary = None
+    if demonstrations is not None:
+        model._torcs_bc_summary = behavior_clone_ppo_policy(
+            model,
+            demonstrations,
+            epochs=bc_epochs,
+            batch_size=bc_batch_size,
+            learning_rate=bc_learning_rate,
+            seed=seed,
+        )
+        bc_path = output_path.with_name(f"{output_path.name}_bc")
+        model.save(str(bc_path))
+        model._torcs_bc_summary["checkpoint_path"] = str(
+            bc_path.with_suffix(".zip")
+        )
     model.learn(total_timesteps=total_timesteps, callback=checkpoint)
     model.save(str(output_path))
     return model
@@ -279,6 +301,8 @@ def evaluate_policy(
         info: dict[str, Any] = {}
         shield_interventions = 0
         speed_sum = 0.0
+        action_counts = [0] * 9
+        teacher_matches = 0
         while not (terminated or truncated):
             action, _ = model.predict(observation, deterministic=True)
             observation, reward, terminated, truncated, info = env.step(int(action))
@@ -286,6 +310,17 @@ def evaluate_policy(
             steps += 1
             shield_interventions += int(bool(info.get("shield_intervened", False)))
             speed_sum += float(info.get("speed_x", 0.0))
+            action = int(info.get("tactical_action", action))
+            if 0 <= action <= 8:
+                action_counts[action] += 1
+            teacher_matches += int(action == int(info.get("teacher_action", -1)))
+        probabilities = [count / max(steps, 1) for count in action_counts]
+        action_entropy = -sum(
+            probability * math.log(probability)
+            for probability in probabilities
+            if probability > 0.0
+        )
+        distance_km = abs(float(info.get("dist_raced", 0.0))) / 1000.0
         results.append(
             {
                 "episode": episode,
@@ -299,9 +334,84 @@ def evaluate_policy(
                 "race_position": int(info.get("race_position", 0)),
                 "shield_interventions": shield_interventions,
                 "mean_speed_x": speed_sum / max(steps, 1),
+                "finish": info.get("termination_reason") == "race_finished",
+                "damage_per_km": float(info.get("damage", 0.0))
+                / max(distance_km, 1e-6),
+                "action_counts": action_counts,
+                "action_entropy": action_entropy,
+                "teacher_agreement_rate": teacher_matches / max(steps, 1),
             }
         )
     return results
+
+
+def summarize_evaluation(results: list[dict[str, Any]]) -> dict[str, Any]:
+    """Aggregate episode evidence without hiding failures behind mean reward."""
+
+    if not results:
+        raise ValueError("evaluation results cannot be empty")
+    finishes = [item for item in results if bool(item.get("finish", False))]
+    action_counts = [0] * 9
+    for item in results:
+        counts = item.get("action_counts", [0] * 9)
+        if isinstance(counts, list) and len(counts) == 9:
+            action_counts = [
+                left + int(right) for left, right in zip(action_counts, counts)
+            ]
+    action_total = max(sum(action_counts), 1)
+    dominant_action_share = max(action_counts) / action_total
+    return {
+        "episodes": len(results),
+        "finish_rate": len(finishes) / len(results),
+        "median_finish_steps": (
+            statistics.median(float(item["steps"]) for item in finishes)
+            if finishes
+            else None
+        ),
+        "median_race_position": statistics.median(
+            float(item.get("race_position", 0)) for item in results
+        ),
+        "median_damage_per_km": statistics.median(
+            float(item.get("damage_per_km", 0.0)) for item in results
+        ),
+        "mean_speed_x": statistics.fmean(
+            float(item.get("mean_speed_x", 0.0)) for item in results
+        ),
+        "mean_teacher_agreement": statistics.fmean(
+            float(item.get("teacher_agreement_rate", 0.0)) for item in results
+        ),
+        "action_counts": action_counts,
+        "dominant_action_share": dominant_action_share,
+        "action_collapsed": dominant_action_share >= 0.9,
+    }
+
+
+def compare_with_expert(policy: dict[str, Any], expert: dict[str, Any]) -> dict[str, Any]:
+    """Apply an explicit initial competitiveness gate to aggregate evidence."""
+
+    finish_ok = float(policy["finish_rate"]) >= float(expert["finish_rate"])
+    position_ok = float(policy["median_race_position"]) <= float(
+        expert["median_race_position"]
+    )
+    policy_damage = float(policy["median_damage_per_km"])
+    expert_damage = float(expert["median_damage_per_km"])
+    damage_ok = policy_damage <= max(expert_damage * 1.1, 5.0)
+    policy_steps = policy.get("median_finish_steps")
+    expert_steps = expert.get("median_finish_steps")
+    pace_ok = (
+        policy_steps is not None
+        and expert_steps is not None
+        and float(policy_steps) <= float(expert_steps) * 1.05
+    )
+    diversity_ok = not bool(policy.get("action_collapsed", True))
+    checks = {
+        "finish_rate": finish_ok,
+        "position": position_ok,
+        "damage_per_km": damage_ok,
+        "finish_pace": pace_ok,
+        "action_diversity": diversity_ok,
+    }
+    return {"competitive": all(checks.values()), "checks": checks}
 
 
 def evaluate_fixed_action(
