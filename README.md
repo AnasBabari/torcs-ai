@@ -17,12 +17,12 @@ In simple terms, this project connects Python code to a 3D racing simulator to t
 5. **Safety & Execution**: An actuator limiter ensures the car never pushes the gas and brake at the same time, while an emergency recovery shield steps in if the car begins spinning out. The physical controls are sent back to TORCS to complete the loop.
 
 ```mermaid
-flowchart TD
-    TORCS["🏁 TORCS Racing Simulator<br/>(3D Physics & Opponents)"] -->|"Telemetry Sensors"| SENSORS["📊 Car & Track Sensors<br/>(Speed, Heading, Rays)"]
-    SENSORS -->|"118-Float Vector"| PPO["🧠 AI Policy (PPO)<br/>(Tactical Decision Maker)"]
-    PPO -->|"Tactical Decision: 0 to 8"| CONTROLLER["⚙️ Deterministic Controller<br/>(Calculates Steering & Pedals)"]
-    CONTROLLER -->|"Continuous Controls"| SLEW["🛡️ Slew Limiter & Safety Shield<br/>(Smooths Actuators & Recovery)"]
-    SLEW -->|"Final Actuators"| TORCS
+graph TD
+    A[TORCS Racing Simulator<br/>3D Physics and Opponents] -->|Telemetry Sensors| B[Car and Track Sensors<br/>Speed, Heading, Rays, Opponents]
+    B -->|118-Value Float Vector| C[AI Policy - PPO Neural Network<br/>Tactical Decision Maker]
+    C -->|Tactical Decision 0 to 8| D[Deterministic Controller<br/>Calculates Steering and Pedals]
+    D -->|Continuous Controls| E[Actuator Limiter and Safety Shield<br/>Smooths Controls and Spin Recovery]
+    E -->|Final Actuators| A
 ```
 
 ---
