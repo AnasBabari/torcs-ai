@@ -18,11 +18,11 @@ In simple terms, this project connects Python code to a 3D racing simulator to t
 
 ```mermaid
 flowchart TD
-    TORCS["🏁 TORCS Racing Simulator<br/>(3D Physics & Opponent Cars)"] -->|Telemetry Sensors| SENSORS["📊 Car & Track Sensor Data<br/>(Speed, Heading, Track Rays, Opponents)"]
-    SENSORS -->|118-value Numeric Vector| PPO["🧠 AI Policy (PPO Neural Network)<br/>(Evaluates Driving Situation)"]
-    PPO -->|Tactical Decision (0 to 8)| CONTROLLER["⚙️ Deterministic Controller<br/>(Calculates Steering, Throttle, Brake, Gear)"]
-    CONTROLLER -->|Raw Controls| SLEW["🛡️ Actuator Limiter & Safety Shield<br/>(Smooths Steering, Emergency Spin Recovery)"]
-    SLEW -->|Final Control Packet| TORCS
+    TORCS["🏁 TORCS Racing Simulator<br/>(3D Physics & Opponents)"] -->|"Telemetry Sensors"| SENSORS["📊 Car & Track Sensors<br/>(Speed, Heading, Rays)"]
+    SENSORS -->|"118-Float Vector"| PPO["🧠 AI Policy (PPO)<br/>(Tactical Decision Maker)"]
+    PPO -->|"Tactical Decision: 0 to 8"| CONTROLLER["⚙️ Deterministic Controller<br/>(Calculates Steering & Pedals)"]
+    CONTROLLER -->|"Continuous Controls"| SLEW["🛡️ Slew Limiter & Safety Shield<br/>(Smooths Actuators & Recovery)"]
+    SLEW -->|"Final Actuators"| TORCS
 ```
 
 ---
