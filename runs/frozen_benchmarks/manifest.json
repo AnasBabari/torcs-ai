@@ -1,0 +1,134 @@
+{
+  "checkpoint": {
+    "format": "stable-baselines3-zip",
+    "path": "C:\\torcs\\gym_torcs\\runs\\ppo_native\\model\\model.zip",
+    "security_notice": "Load only explicitly trusted local checkpoint artifacts",
+    "sha256": "593e80842daeadc9fa77eab8588cb2d4870e6a0e8e83c2b7afae4336d767fb73"
+  },
+  "created_at_utc": "2026-08-14T20:33:26.082618+00:00",
+  "environment": {
+    "action_schema": "tactical-9-v1",
+    "contaminated_held_out": false,
+    "driving_profiles": {
+      "road/alpine-1": {
+        "sharp_turn_braking": false,
+        "speed_limit_scale": 1.0
+      }
+    },
+    "max_steps": 5000,
+    "observation_schema": "competitive-telemetry-v1",
+    "reward_schema": "progress-position-safety-teacher-v3",
+    "teacher_guidance": 0.0,
+    "track": "road/alpine-1",
+    "track_partition_roles": {
+      "held_out_test": [
+        "road/spring",
+        "road/street-1"
+      ],
+      "training": [
+        "road/alpine-1",
+        "road/forza",
+        "oval/michigan"
+      ],
+      "validation": [
+        "road/ruudskogen"
+      ]
+    }
+  },
+  "git": {
+    "commit_sha": "e87e90ef01db98edc2c1d0359472c6686684adff",
+    "dirty": true
+  },
+  "manifest_schema": "torcs-run-v1",
+  "role": "train",
+  "runtime": {
+    "cuda_available": false,
+    "dependencies": {
+      "gymnasium": "1.0.0",
+      "numpy": "2.4.6",
+      "stable-baselines3": "2.9.0",
+      "torch": "2.13.0"
+    },
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 165 Stepping 5, GenuineIntel",
+    "python": "3.11.9"
+  },
+  "seed": 7,
+  "simulator": {
+    "executable": "C:\\torcs\\torcs\\wtorcs.exe",
+    "executable_sha256": "efcaec2c0c872b381af1b75fbaf68a0e2f942afc98a80651d3e3b5c7ffa1b3b4",
+    "home": "C:\\torcs\\torcs",
+    "opponents": [
+      "berniw",
+      "bt",
+      "inferno",
+      "olethros",
+      "tita"
+    ],
+    "protocol_version": "2010",
+    "scr_driver_slots": 10,
+    "scr_server_dll_sha256": "a5125a9529705e7f49c2435957d7cf8e99ada619c71c06d8739c5b0c17971893",
+    "scr_server_xml_sha256": "999382bebefda329472831f11abfc24bdaa246220c6f9d28c3916a04d49dd396",
+    "tracks": {
+      "oval/michigan": "1bc749150403a5f0740a1b438816e2f32afb482116f5055d58d5b13df238ab7f",
+      "road/alpine-1": "286e0e184f21f29dee0618bb45b8d363e85402135ce5f1c3e74bbb8cd9356f8a",
+      "road/forza": "58de590537866cc3516d3b7724025ab6d197aff73c6248052de71e78caac430c",
+      "road/ruudskogen": "50a0f7028d269ad49afc490c7876c76f5b90e597eea9456f088ab23f7e7064d7",
+      "road/spring": "85e2df0c3da6e24bede09a8759c0c8ad0b785b8c07833fd2054e97358831ebb7",
+      "road/street-1": "ccb59a353654dd8934c449ec1c1f91ea5ed66deda6609441abdfee1ec72f7ba6"
+    }
+  },
+  "training": {
+    "algorithm": "PPO",
+    "batch_size": 64,
+    "behavior_cloning": {
+      "action_counts": [
+        182,
+        128,
+        140,
+        14,
+        99,
+        1037,
+        73,
+        69,
+        86
+      ],
+      "balanced_training_accuracy": 0.3327221419248316,
+      "batch_size": 256,
+      "checkpoint_path": "C:\\torcs\\gym_torcs\\runs\\ppo_native\\model\\model_bc.zip",
+      "epochs": 3,
+      "final_loss": 1.747352123260498,
+      "learning_rate": 0.001,
+      "per_action_accuracy": {
+        "0": 0.9780219793319702,
+        "1": 0.0,
+        "2": 0.0,
+        "3": 0.0,
+        "4": 0.0,
+        "5": 0.9729990363121033,
+        "6": 1.0,
+        "7": 0.043478261679410934,
+        "8": 0.0
+      },
+      "samples": 1828,
+      "tracks": [
+        "default"
+      ],
+      "training_accuracy": 0.690919041633606
+    },
+    "checkpoint_freq": 10000,
+    "device": "auto",
+    "expert_episodes": 1,
+    "expert_stride": 2,
+    "learning_rate": 0.0003,
+    "model_path": "C:\\torcs\\gym_torcs\\runs\\ppo_native\\model\\model.zip",
+    "n_steps": 256,
+    "simulator_timeout_seconds": 30.0,
+    "target_kl": 0.02,
+    "teacher_guidance": 0.0,
+    "total_timesteps": 5000,
+    "tracks": [
+      "road/alpine-1"
+    ]
+  }
+}

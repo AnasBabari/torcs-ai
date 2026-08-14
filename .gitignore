@@ -63,8 +63,9 @@ vtorcs-RL-color/
 
 # TORCS runtime outputs and runs
 .runtime/
-runs/
+runs/*
 !runs/frozen_benchmarks/
+!runs/frozen_benchmarks/**
 runtime.log
 torcs_ai.log
 race_data.csv
