@@ -17,13 +17,15 @@ In simple terms, this project connects Python code to a 3D racing simulator to t
 5. **Safety & Execution**: An actuator limiter ensures the car never pushes the gas and brake at the same time, while an emergency recovery shield steps in if the car begins spinning out. The physical controls are sent back to TORCS to complete the loop.
 
 ```mermaid
-graph TD
-    A[TORCS Racing Simulator<br/>3D Physics and Opponents] -->|Telemetry Sensors| B[Car and Track Sensors<br/>Speed, Heading, Rays, Opponents]
-    B -->|118-Value Float Vector| C[AI Policy - PPO Neural Network<br/>Tactical Decision Maker]
-    C -->|Tactical Decision 0 to 8| D[Deterministic Controller<br/>Calculates Steering and Pedals]
-    D -->|Continuous Controls| E[Actuator Limiter and Safety Shield<br/>Smooths Controls and Spin Recovery]
-    E -->|Final Actuators| A
+flowchart TD
+    GAME["🏁 TORCS Racing Game<br/>The simulated 3D race"] --> SEE["👀 What the car can see<br/>Speed, track position, and nearby cars"]
+    SEE --> AI["🧠 AI chooses a strategy<br/>Lane: Left / Centre / Right<br/>Speed: Slow down / Cruise / Push"]
+    AI --> CONTROL["🎮 Python controls the car<br/>Calculates physical steering, throttle, brake & gears"]
+    CONTROL --> SAFETY["🛡️ Safety checks<br/>Smooths controls & recovers from spins"]
+    SAFETY --> MOVE["🚗 Car moves in TORCS<br/>(This decision loop repeats 50 times per second)"]
 ```
+
+> **Example:** When TORCS reports a slower opponent car directly ahead, the AI agent might select the tactical strategy **"move left + push"**. The deterministic Python controller then calculates the exact continuous steering angle, throttle percentage, and gear shift required to perform the overtake safely.
 
 ---
 
@@ -336,6 +338,16 @@ pytest
 - **Telemetry Schema**: `competitive-telemetry-v1` (118 floats, `[-1.0, 1.0]` normalized range, `-1.0` unobserved sentinel).
 - **Tactical Action Schema**: `tactical-grid-v1` (Discrete 9: $\{-0.6, 0.0, 0.6\} \times \{0.65, 0.85, 1.0\}$).
 - **Reward Function**: `progress-position-safety-teacher-v3`.
+
+### Detailed Engineering Control Flow
+```mermaid
+graph TD
+    A["TORCS Simulation Engine<br/>(Native SCR UDP Server)"] -->|"Raw Telemetry"| B["Observation Encoder<br/>(competitive-telemetry-v1 / 118-D)"]
+    B -->|"Observation Vector s_t"| C["PPO Policy Neural Network<br/>(Actor-Critic Model)"]
+    C -->|"Tactical Intent a_t ∈ {0..8}"| D["Deterministic Controller<br/>(default_low_level_controller)"]
+    D -->|"Continuous Controls"| E["Slew Limiter & Safety Shield<br/>(Pedal Exclusion & Spin Recovery)"]
+    E -->|"Actuator Commands"| A
+```
 
 ### Reward Formulation
 $$R_t = \Delta d_{\text{progress}} + 0.5 \cdot \Delta p_{\text{race}} + R_{\text{finish}} - (R_{\text{track}} + R_{\text{angle}} + R_{\text{slip}} + R_{\text{damage}}) + R_{\text{teacher}}$$
