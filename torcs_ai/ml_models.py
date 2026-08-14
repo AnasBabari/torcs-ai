@@ -4,58 +4,68 @@ Advanced Machine Learning Models for TORCS Racing AI
 Uses PyTorch for deep neural networks and reinforcement learning.
 """
 
+import logging
+import os
+import pickle
+import random
+import time
+from collections import deque
+from pathlib import Path
+from typing import Any, Optional
+
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.utils.data import Dataset, DataLoader
-import numpy as np
-import pickle
-import time
-import logging
-from typing import Dict, List, Any, Optional, Tuple
-from collections import deque
-import random
-import os
-from pathlib import Path
+from torch.utils.data import DataLoader, Dataset
 
 logger = logging.getLogger(__name__)
+
 
 class RacingDataset(Dataset):
     """Dataset for racing experiences."""
 
-    def __init__(self, experiences: List[Dict[str, Any]]):
+    def __init__(self, experiences: list[dict[str, Any]]):
         self.experiences = experiences
 
     def __len__(self) -> int:
         return len(self.experiences)
 
-    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         exp = self.experiences[idx]
-        sensors = exp['sensors']
-        actions = exp['actions']
+        sensors = exp["sensors"]
+        actions = exp["actions"]
 
         # Extract features
-        speed = sensors.get('speedX', 0)
-        angle = sensors.get('angle', 0)
-        track_pos = sensors.get('trackPos', 0)
+        speed = sensors.get("speedX", 0)
+        angle = sensors.get("angle", 0)
+        track_pos = sensors.get("trackPos", 0)
         curvature = self._calculate_curvature(sensors)
 
-        features = torch.tensor([
-            speed, angle, track_pos, curvature,
-            speed**2, angle**2, abs(track_pos), curvature*speed
-        ], dtype=torch.float32)
+        features = torch.tensor(
+            [
+                speed,
+                angle,
+                track_pos,
+                curvature,
+                speed**2,
+                angle**2,
+                abs(track_pos),
+                curvature * speed,
+            ],
+            dtype=torch.float32,
+        )
 
-        targets = torch.tensor([
-            actions.get('steer', 0),
-            actions.get('accel', 0),
-            actions.get('brake', 0)
-        ], dtype=torch.float32)
+        targets = torch.tensor(
+            [actions.get("steer", 0), actions.get("accel", 0), actions.get("brake", 0)],
+            dtype=torch.float32,
+        )
 
         return features, targets
 
-    def _calculate_curvature(self, sensors: Dict[str, Any]) -> float:
+    def _calculate_curvature(self, sensors: dict[str, Any]) -> float:
         """Calculate track curvature from sensor data."""
-        track = sensors.get('track', [])
+        track = sensors.get("track", [])
         if len(track) < 5:
             return 0.0
 
@@ -68,8 +78,10 @@ class RacingDataset(Dataset):
 class RacingNetwork(nn.Module):
     """Neural network for racing action prediction."""
 
-    def __init__(self, input_size: int = 8, hidden_size: int = 128, output_size: int = 3):
-        super(RacingNetwork, self).__init__()
+    def __init__(
+        self, input_size: int = 8, hidden_size: int = 128, output_size: int = 3
+    ):
+        super().__init__()
         self.network = nn.Sequential(
             nn.Linear(input_size, hidden_size),
             nn.ReLU(),
@@ -77,10 +89,10 @@ class RacingNetwork(nn.Module):
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
             nn.Dropout(0.1),
-            nn.Linear(hidden_size, hidden_size//2),
+            nn.Linear(hidden_size, hidden_size // 2),
             nn.ReLU(),
-            nn.Linear(hidden_size//2, output_size),
-            nn.Tanh()  # Output between -1 and 1
+            nn.Linear(hidden_size // 2, output_size),
+            nn.Tanh(),  # Output between -1 and 1
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -90,14 +102,16 @@ class RacingNetwork(nn.Module):
 class DQNAgent(nn.Module):
     """Deep Q-Network for reinforcement learning."""
 
-    def __init__(self, state_size: int = 8, action_size: int = 9, hidden_size: int = 128):
-        super(DQNAgent, self).__init__()
+    def __init__(
+        self, state_size: int = 8, action_size: int = 9, hidden_size: int = 128
+    ):
+        super().__init__()
         self.network = nn.Sequential(
             nn.Linear(state_size, hidden_size),
             nn.ReLU(),
             nn.Linear(hidden_size, hidden_size),
             nn.ReLU(),
-            nn.Linear(hidden_size, action_size)
+            nn.Linear(hidden_size, action_size),
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -109,7 +123,7 @@ class MLRacingAI:
 
     ACTION_SIZE = 9
 
-    def __init__(self, model_path: Optional[str] = None, auto_train: bool = False):
+    def __init__(self, model_path: str | None = None, auto_train: bool = False):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         logger.info(f"Using device: {self.device}")
 
@@ -131,10 +145,10 @@ class MLRacingAI:
 
         # Optimizers
         self.optimizers = {
-            'steer': optim.Adam(self.steer_net.parameters(), lr=1e-4),
-            'accel': optim.Adam(self.accel_net.parameters(), lr=1e-4),
-            'brake': optim.Adam(self.brake_net.parameters(), lr=1e-4),
-            'dqn': optim.Adam(self.dqn_agent.parameters(), lr=1e-4)
+            "steer": optim.Adam(self.steer_net.parameters(), lr=1e-4),
+            "accel": optim.Adam(self.accel_net.parameters(), lr=1e-4),
+            "brake": optim.Adam(self.brake_net.parameters(), lr=1e-4),
+            "dqn": optim.Adam(self.dqn_agent.parameters(), lr=1e-4),
         }
 
         # Experience replay
@@ -151,10 +165,10 @@ class MLRacingAI:
         self.previous_brake = 0
         self.prev_damage = 0
         self.prev_fuel = 100
-        self.model_path = Path(model_path or os.environ.get(
-            'TORCS_MODEL_PATH', 'racing_ai_models.pth'
-        )).expanduser()
-        self._pending_transition: Optional[Dict[str, Any]] = None
+        self.model_path = Path(
+            model_path or os.environ.get("TORCS_MODEL_PATH", "racing_ai_models.pth")
+        ).expanduser()
+        self._pending_transition: dict[str, Any] | None = None
 
         # Load existing models
         self.load_models()
@@ -167,11 +181,11 @@ class MLRacingAI:
             checkpoint = torch.load(
                 self.model_path, map_location=self.device, weights_only=True
             )
-            self.steer_net.load_state_dict(checkpoint['steer_net'])
-            self.accel_net.load_state_dict(checkpoint['accel_net'])
-            self.brake_net.load_state_dict(checkpoint['brake_net'])
-            self.dqn_agent.load_state_dict(checkpoint['dqn_agent'])
-            self.target_dqn.load_state_dict(checkpoint['target_dqn'])
+            self.steer_net.load_state_dict(checkpoint["steer_net"])
+            self.accel_net.load_state_dict(checkpoint["accel_net"])
+            self.brake_net.load_state_dict(checkpoint["brake_net"])
+            self.dqn_agent.load_state_dict(checkpoint["dqn_agent"])
+            self.target_dqn.load_state_dict(checkpoint["target_dqn"])
             self.is_trained = True
             logger.info("Loaded pre-trained neural network models!")
         except FileNotFoundError:
@@ -180,7 +194,9 @@ class MLRacingAI:
                 self.model_path,
             )
         except (RuntimeError, KeyError, TypeError) as exc:
-            logger.warning("Ignoring incompatible model checkpoint %s: %s", self.model_path, exc)
+            logger.warning(
+                "Ignoring incompatible model checkpoint %s: %s", self.model_path, exc
+            )
 
     def train_initial_models(self) -> None:
         """Train initial neural network models."""
@@ -192,9 +208,15 @@ class MLRacingAI:
         dataloader = DataLoader(dataset, batch_size=128, shuffle=True)
 
         # Train each network
-        for action, net in [('steer', self.steer_net), ('accel', self.accel_net), ('brake', self.brake_net)]:
+        for action, net in [
+            ("steer", self.steer_net),
+            ("accel", self.accel_net),
+            ("brake", self.brake_net),
+        ]:
             logger.info(f"Training {action} network...")
-            self._train_network(net, self.optimizers[action], dataloader, action, epochs=50)
+            self._train_network(
+                net, self.optimizers[action], dataloader, action, epochs=50
+            )
 
         self.is_trained = True
         self.save_models()
@@ -210,24 +232,30 @@ class MLRacingAI:
             curvature = np.random.uniform(0, 1)
 
             sensors = {
-                'speedX': speed,
-                'angle': angle,
-                'trackPos': track_pos,
-                'track': np.random.uniform(-1, 1, 19)
+                "speedX": speed,
+                "angle": angle,
+                "trackPos": track_pos,
+                "track": np.random.uniform(-1, 1, 19),
             }
 
             actions = {
-                'steer': self.expert_steering(speed, angle, track_pos, curvature),
-                'accel': self.expert_acceleration(speed, angle, curvature),
-                'brake': self.expert_braking(speed, angle, curvature)
+                "steer": self.expert_steering(speed, angle, track_pos, curvature),
+                "accel": self.expert_acceleration(speed, angle, curvature),
+                "brake": self.expert_braking(speed, angle, curvature),
             }
 
-            experiences.append({'sensors': sensors, 'actions': actions, 'reward': 0})
+            experiences.append({"sensors": sensors, "actions": actions, "reward": 0})
 
         return RacingDataset(experiences)
 
-    def _train_network(self, net: nn.Module, optimizer: optim.Optimizer,
-                      dataloader: DataLoader, action: str, epochs: int = 10) -> None:
+    def _train_network(
+        self,
+        net: nn.Module,
+        optimizer: optim.Optimizer,
+        dataloader: DataLoader,
+        action: str,
+        epochs: int = 10,
+    ) -> None:
         """Train a single neural network."""
         criterion = nn.MSELoss()
         net.train()
@@ -236,7 +264,11 @@ class MLRacingAI:
             total_loss = 0
             for features, targets in dataloader:
                 features = features.to(self.device)
-                targets = targets[:, {'steer': 0, 'accel': 1, 'brake': 2}[action]].unsqueeze(1).to(self.device)
+                targets = (
+                    targets[:, {"steer": 0, "accel": 1, "brake": 2}[action]]
+                    .unsqueeze(1)
+                    .to(self.device)
+                )
 
                 optimizer.zero_grad()
                 outputs = net(features)
@@ -247,16 +279,20 @@ class MLRacingAI:
                 total_loss += loss.item()
 
             if epoch % 10 == 0:
-                logger.info(f"Epoch {epoch}, Loss: {total_loss/len(dataloader):.4f}")
+                logger.info(f"Epoch {epoch}, Loss: {total_loss / len(dataloader):.4f}")
 
-    def expert_steering(self, speed: float, angle: float, track_pos: float, curvature: float) -> float:
+    def expert_steering(
+        self, speed: float, angle: float, track_pos: float, curvature: float
+    ) -> float:
         """Generate expert steering decisions."""
         steer = angle * 25 / np.pi - track_pos * 0.25
         if curvature > 0.3:
             steer *= 1.2
         return np.clip(steer, -1, 1)
 
-    def expert_acceleration(self, speed: float, angle: float, curvature: float) -> float:
+    def expert_acceleration(
+        self, speed: float, angle: float, curvature: float
+    ) -> float:
         """Generate expert acceleration decisions."""
         target_speed = 280 * (1 - curvature * 0.4)
         speed_error = target_speed - speed
@@ -276,32 +312,47 @@ class MLRacingAI:
             return min(0.8, abs(angle) * 2)
         return 0.0
 
-    def predict_action(self, sensor_data: Dict[str, Any]) -> Optional[Dict[str, float]]:
+    def predict_action(self, sensor_data: dict[str, Any]) -> dict[str, float] | None:
         """Use neural networks to predict optimal actions."""
         if not self.is_trained:
             curvature = self._calculate_curvature(sensor_data)
             return {
-                'steer': self.expert_steering(
-                    sensor_data.get('speedX', 0), sensor_data.get('angle', 0),
-                    sensor_data.get('trackPos', 0), curvature
+                "steer": self.expert_steering(
+                    sensor_data.get("speedX", 0),
+                    sensor_data.get("angle", 0),
+                    sensor_data.get("trackPos", 0),
+                    curvature,
                 ),
-                'accel': self.expert_acceleration(
-                    sensor_data.get('speedX', 0), sensor_data.get('angle', 0), curvature
+                "accel": self.expert_acceleration(
+                    sensor_data.get("speedX", 0), sensor_data.get("angle", 0), curvature
                 ),
-                'brake': self.expert_braking(
-                    sensor_data.get('speedX', 0), sensor_data.get('angle', 0), curvature
+                "brake": self.expert_braking(
+                    sensor_data.get("speedX", 0), sensor_data.get("angle", 0), curvature
                 ),
             }
 
-        speed = sensor_data.get('speedX', 0)
-        angle = sensor_data.get('angle', 0)
-        track_pos = sensor_data.get('trackPos', 0)
+        speed = sensor_data.get("speedX", 0)
+        angle = sensor_data.get("angle", 0)
+        track_pos = sensor_data.get("trackPos", 0)
         curvature = self._calculate_curvature(sensor_data)
 
-        features = torch.tensor([
-            speed, angle, track_pos, curvature,
-            speed**2, angle**2, abs(track_pos), curvature*speed
-        ], dtype=torch.float32).unsqueeze(0).to(self.device)
+        features = (
+            torch.tensor(
+                [
+                    speed,
+                    angle,
+                    track_pos,
+                    curvature,
+                    speed**2,
+                    angle**2,
+                    abs(track_pos),
+                    curvature * speed,
+                ],
+                dtype=torch.float32,
+            )
+            .unsqueeze(0)
+            .to(self.device)
+        )
 
         predictions = {}
 
@@ -314,15 +365,15 @@ class MLRacingAI:
             accel_pred = self.accel_net(features).cpu().item()
             brake_pred = self.brake_net(features).cpu().item()
 
-            predictions['steer'] = np.clip(steer_pred, -1, 1)
-            predictions['accel'] = np.clip(accel_pred, 0, 1)
-            predictions['brake'] = np.clip(brake_pred, 0, 1)
+            predictions["steer"] = np.clip(steer_pred, -1, 1)
+            predictions["accel"] = np.clip(accel_pred, 0, 1)
+            predictions["brake"] = np.clip(brake_pred, 0, 1)
 
         return predictions
 
-    def _calculate_curvature(self, sensor_data: Dict[str, Any]) -> float:
+    def _calculate_curvature(self, sensor_data: dict[str, Any]) -> float:
         """Calculate track curvature."""
-        track = sensor_data.get('track', [])
+        track = sensor_data.get("track", [])
         if len(track) < 5:
             return 0.0
         diffs = np.diff(track[:5])
@@ -330,10 +381,10 @@ class MLRacingAI:
 
     def update_models(
         self,
-        sensor_data: Dict[str, Any],
-        actions_taken: Dict[str, float],
+        sensor_data: dict[str, Any],
+        actions_taken: dict[str, float],
         reward: float,
-        next_sensor_data: Optional[Dict[str, Any]] = None,
+        next_sensor_data: dict[str, Any] | None = None,
         *,
         terminated: bool = False,
         truncated: bool = False,
@@ -350,34 +401,36 @@ class MLRacingAI:
         current_state = self._extract_state(sensor_data)
         if self._pending_transition is not None:
             pending = self._pending_transition
-            pending['next_state'] = current_state
+            pending["next_state"] = current_state
             self.memory.append(pending)
             self._pending_transition = None
 
         transition = {
-            'state': current_state,
-            'action': self._discretize_actions(actions_taken),
-            'reward': float(reward),
-            'next_state': None,
-            'terminated': bool(terminated),
-            'truncated': bool(truncated),
+            "state": current_state,
+            "action": self._discretize_actions(actions_taken),
+            "reward": float(reward),
+            "next_state": None,
+            "terminated": bool(terminated),
+            "truncated": bool(truncated),
         }
         if next_sensor_data is not None:
-            transition['next_state'] = self._extract_state(next_sensor_data)
+            transition["next_state"] = self._extract_state(next_sensor_data)
             self.memory.append(transition)
         elif terminated or truncated:
             # A terminal transition has no valid future observation and must
             # not be trained through the legacy path.
-            transition['next_state'] = current_state
+            transition["next_state"] = current_state
             self.memory.append(transition)
         else:
             self._pending_transition = transition
-        self.data_collector.add_experience({
-            'sensors': sensor_data,
-            'actions': actions_taken,
-            'reward': reward,
-            'timestamp': time.time()
-        })
+        self.data_collector.add_experience(
+            {
+                "sensors": sensor_data,
+                "actions": actions_taken,
+                "reward": reward,
+                "timestamp": time.time(),
+            }
+        )
 
         if len(self.memory) > self.batch_size:
             self._train_dqn()
@@ -386,34 +439,42 @@ class MLRacingAI:
         if len(self.data_collector.experiences) % 1000 == 0:
             self.retrain_models()
 
-    def _extract_state(self, sensor_data: Dict[str, Any]) -> torch.Tensor:
+    def _extract_state(self, sensor_data: dict[str, Any]) -> torch.Tensor:
         """Extract state tensor from sensor data."""
-        speed = sensor_data.get('speedX', 0)
-        angle = sensor_data.get('angle', 0)
-        track_pos = sensor_data.get('trackPos', 0)
+        speed = sensor_data.get("speedX", 0)
+        angle = sensor_data.get("angle", 0)
+        track_pos = sensor_data.get("trackPos", 0)
         curvature = self._calculate_curvature(sensor_data)
 
         normalized_speed = float(np.clip(speed, -50.0, 350.0) / 350.0)
         normalized_angle = float(np.clip(angle / np.pi, -1.0, 1.0))
         normalized_track_pos = float(np.clip(track_pos / 2.0, -1.0, 1.0))
         normalized_curvature = float(np.clip(curvature / 200.0, 0.0, 1.0))
-        return torch.tensor([
-            normalized_speed, normalized_angle, normalized_track_pos,
-            normalized_curvature, normalized_speed**2, normalized_angle**2,
-            abs(normalized_track_pos), normalized_curvature * normalized_speed
-        ], dtype=torch.float32)
+        return torch.tensor(
+            [
+                normalized_speed,
+                normalized_angle,
+                normalized_track_pos,
+                normalized_curvature,
+                normalized_speed**2,
+                normalized_angle**2,
+                abs(normalized_track_pos),
+                normalized_curvature * normalized_speed,
+            ],
+            dtype=torch.float32,
+        )
 
-    def _discretize_actions(self, actions: Dict[str, float]) -> int:
+    def _discretize_actions(self, actions: dict[str, float]) -> int:
         """Map continuous controls to the canonical nine tactical actions.
 
         Longitudinal controls are mutually exclusive: brake wins when it is
         stronger than throttle, otherwise throttle and coast form the other
         two states.  This keeps every action in the DQN's nine-output range.
         """
-        steer_value = float(np.clip(actions.get('steer', 0.0), -1.0, 1.0))
+        steer_value = float(np.clip(actions.get("steer", 0.0), -1.0, 1.0))
         steer_index = 0 if steer_value < -1 / 3 else 2 if steer_value > 1 / 3 else 1
-        accel = float(np.clip(actions.get('accel', 0.0), 0.0, 1.0))
-        brake = float(np.clip(actions.get('brake', 0.0), 0.0, 1.0))
+        accel = float(np.clip(actions.get("accel", 0.0), 0.0, 1.0))
+        brake = float(np.clip(actions.get("brake", 0.0), 0.0, 1.0))
         if brake > max(accel, 0.1):
             longitudinal_index = 0
         elif accel > 0.1:
@@ -428,15 +489,21 @@ class MLRacingAI:
             return
 
         batch = random.sample(self.memory, self.batch_size)
-        valid_batch = [exp for exp in batch if exp.get('next_state') is not None]
+        valid_batch = [exp for exp in batch if exp.get("next_state") is not None]
         if len(valid_batch) < self.batch_size:
             return
-        next_states = torch.stack([exp['next_state'] for exp in valid_batch]).to(self.device)
-        states = torch.stack([exp['state'] for exp in valid_batch]).to(self.device)
-        actions = torch.tensor([exp['action'] for exp in valid_batch], dtype=torch.long).to(self.device)
-        rewards = torch.tensor([exp['reward'] for exp in valid_batch], dtype=torch.float32).to(self.device)
+        next_states = torch.stack([exp["next_state"] for exp in valid_batch]).to(
+            self.device
+        )
+        states = torch.stack([exp["state"] for exp in valid_batch]).to(self.device)
+        actions = torch.tensor(
+            [exp["action"] for exp in valid_batch], dtype=torch.long
+        ).to(self.device)
+        rewards = torch.tensor(
+            [exp["reward"] for exp in valid_batch], dtype=torch.float32
+        ).to(self.device)
         terminal_mask = torch.tensor(
-            [exp.get('terminated', exp.get('done', False)) for exp in valid_batch],
+            [exp.get("terminated", exp.get("done", False)) for exp in valid_batch],
             dtype=torch.float32,
         ).to(self.device)
 
@@ -450,9 +517,9 @@ class MLRacingAI:
 
         # Loss and update
         loss = nn.MSELoss()(current_q.squeeze(), target_q)
-        self.optimizers['dqn'].zero_grad()
+        self.optimizers["dqn"].zero_grad()
         loss.backward()
-        self.optimizers['dqn'].step()
+        self.optimizers["dqn"].step()
 
         # Update epsilon
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
@@ -466,13 +533,21 @@ class MLRacingAI:
         if len(self.data_collector.experiences) < 100:
             return
 
-        logger.info(f"Retraining neural networks with {len(self.data_collector.experiences)} experiences...")
+        logger.info(
+            f"Retraining neural networks with {len(self.data_collector.experiences)} experiences..."
+        )
 
         dataset = RacingDataset(self.data_collector.experiences[-5000:])
         dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-        for action, net in [('steer', self.steer_net), ('accel', self.accel_net), ('brake', self.brake_net)]:
-            self._train_network(net, self.optimizers[action], dataloader, action, epochs=5)
+        for action, net in [
+            ("steer", self.steer_net),
+            ("accel", self.accel_net),
+            ("brake", self.brake_net),
+        ]:
+            self._train_network(
+                net, self.optimizers[action], dataloader, action, epochs=5
+            )
 
         self.save_models()
         logger.info("Neural networks retrained!")
@@ -481,14 +556,17 @@ class MLRacingAI:
         """Save trained models."""
         try:
             self.model_path.parent.mkdir(parents=True, exist_ok=True)
-            torch.save({
-                'steer_net': self.steer_net.state_dict(),
-                'accel_net': self.accel_net.state_dict(),
-                'brake_net': self.brake_net.state_dict(),
-                'dqn_agent': self.dqn_agent.state_dict(),
-                'target_dqn': self.target_dqn.state_dict(),
-                'training_date': time.time()
-            }, self.model_path)
+            torch.save(
+                {
+                    "steer_net": self.steer_net.state_dict(),
+                    "accel_net": self.accel_net.state_dict(),
+                    "brake_net": self.brake_net.state_dict(),
+                    "dqn_agent": self.dqn_agent.state_dict(),
+                    "target_dqn": self.target_dqn.state_dict(),
+                    "training_date": time.time(),
+                },
+                self.model_path,
+            )
             logger.info("Models saved successfully to %s", self.model_path)
         except Exception as e:
             logger.error(f"Error saving models: {e}")
@@ -502,39 +580,41 @@ class MLRacingAI:
 
         if nn_actions and random.random() > self.epsilon:
             # Use neural network predictions
-            R['steer'] = nn_actions['steer']
-            R['accel'] = nn_actions['accel']
-            R['brake'] = nn_actions['brake']
+            R["steer"] = nn_actions["steer"]
+            R["accel"] = nn_actions["accel"]
+            R["brake"] = nn_actions["brake"]
         else:
             # Fallback to expert system
-            R['steer'] = self.expert_steering(
-                S.get('speedX', 0), S.get('angle', 0),
-                S.get('trackPos', 0), self._calculate_curvature(S)
+            R["steer"] = self.expert_steering(
+                S.get("speedX", 0),
+                S.get("angle", 0),
+                S.get("trackPos", 0),
+                self._calculate_curvature(S),
             )
-            R['accel'] = self.expert_acceleration(
-                S.get('speedX', 0), S.get('angle', 0), self._calculate_curvature(S)
+            R["accel"] = self.expert_acceleration(
+                S.get("speedX", 0), S.get("angle", 0), self._calculate_curvature(S)
             )
-            R['brake'] = self.expert_braking(
-                S.get('speedX', 0), S.get('angle', 0), self._calculate_curvature(S)
+            R["brake"] = self.expert_braking(
+                S.get("speedX", 0), S.get("angle", 0), self._calculate_curvature(S)
             )
 
         # Gear shifting
-        R['gear'] = self._shift_gears(S)
+        R["gear"] = self._shift_gears(S)
 
         # Update state and reward
         reward = self.calculate_reward(S, R)
         self.update_models(S, R, reward)
 
         # Update previous values
-        self.previous_steer = R['steer']
-        self.previous_accel = R['accel']
-        self.previous_brake = R['brake']
+        self.previous_steer = R["steer"]
+        self.previous_accel = R["accel"]
+        self.previous_brake = R["brake"]
 
-    def _shift_gears(self, S: Dict[str, Any]) -> int:
+    def _shift_gears(self, S: dict[str, Any]) -> int:
         """Use a bounded RPM controller and never leave a moving car neutral."""
-        current = int(np.clip(S.get('gear', 1), -1, 6))
-        speed = float(S.get('speedX', 0))
-        rpm = float(S.get('rpm', 0))
+        current = int(np.clip(S.get("gear", 1), -1, 6))
+        speed = float(S.get("speedX", 0))
+        rpm = float(S.get("rpm", 0))
         if current < 1:
             return 1 if speed >= 0 else -1
         if rpm >= 8_500 and current < 6:
@@ -543,18 +623,18 @@ class MLRacingAI:
             return current - 1
         return current
 
-    def calculate_reward(self, S: Dict[str, Any], R: Dict[str, float]) -> float:
+    def calculate_reward(self, S: dict[str, Any], R: dict[str, float]) -> float:
         """Calculate reward for reinforcement learning."""
         reward = 0.0
 
         # Speed reward
-        speed = S.get('speedX', 0)
-        distance = float(S.get('distRaced', 0.0))
-        previous_distance = getattr(self, 'prev_distance', distance)
+        S.get("speedX", 0)
+        distance = float(S.get("distRaced", 0.0))
+        previous_distance = getattr(self, "prev_distance", distance)
         reward += float(np.clip(distance - previous_distance, -5.0, 5.0)) * 0.01
 
         # Position reward
-        track_pos = abs(S.get('trackPos', 0))
+        track_pos = abs(S.get("trackPos", 0))
         if track_pos < 0.8:
             reward += 1.0
         elif track_pos < 1.0:
@@ -563,18 +643,18 @@ class MLRacingAI:
             reward -= 2.0
 
         # Stability reward
-        angle = abs(S.get('angle', 0))
+        angle = abs(S.get("angle", 0))
         if angle < 0.2:
             reward += 0.5
 
         # Damage penalty
-        damage = float(S.get('damage', 0.0))
+        damage = float(S.get("damage", 0.0))
         damage_delta = max(0.0, damage - self.prev_damage)
         reward -= min(damage_delta / 1000.0, 1.0) * 2.0
         action_delta = (
-            abs(float(R.get('steer', 0.0)) - self.previous_steer)
-            + abs(float(R.get('accel', 0.0)) - self.previous_accel)
-            + abs(float(R.get('brake', 0.0)) - self.previous_brake)
+            abs(float(R.get("steer", 0.0)) - self.previous_steer)
+            + abs(float(R.get("accel", 0.0)) - self.previous_accel)
+            + abs(float(R.get("brake", 0.0)) - self.previous_brake)
         )
         reward -= 0.01 * action_delta
 
@@ -588,9 +668,9 @@ class DataCollector:
     """Collects racing experiences for training."""
 
     def __init__(self):
-        self.experiences: List[Dict[str, Any]] = []
+        self.experiences: list[dict[str, Any]] = []
 
-    def add_experience(self, experience: Dict[str, Any]) -> None:
+    def add_experience(self, experience: dict[str, Any]) -> None:
         """Add a new experience."""
         self.experiences.append(experience)
 

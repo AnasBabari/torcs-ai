@@ -39,7 +39,9 @@ def test_track_config_rejects_unapproved_track(tmp_path: Path) -> None:
         write_single_track_race_config(runtime, "../outside")
 
 
-def test_track_config_converts_only_interactive_player_to_scr_server(tmp_path: Path) -> None:
+def test_track_config_converts_only_interactive_player_to_scr_server(
+    tmp_path: Path,
+) -> None:
     runtime = _runtime(tmp_path)
     source = runtime / "config" / "raceman" / "quickrace.xml"
     source.write_text(
@@ -49,7 +51,7 @@ def test_track_config_converts_only_interactive_player_to_scr_server(tmp_path: P
         + '<attstr name="module" val="human"/></section>\n'
         + '<section name="Drivers Start List"><section name="1">'
         + '<attstr name="module" val="human"/><attnum name="idx" val="0"/>'
-        + '</section></section>\n'
+        + "</section></section>\n"
         + '<section name="2"><attstr name="module" val="human"/></section>\n',
         encoding="utf-8",
     )

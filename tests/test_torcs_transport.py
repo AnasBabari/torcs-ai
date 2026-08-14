@@ -43,7 +43,7 @@ class _FakeClient:
 
     def shutdown(self) -> None:
         self.closed = True
-        self.so = None
+        self.so = None  # type: ignore[assignment]
 
 
 class _FakeSession:
@@ -70,9 +70,7 @@ def test_config_rejects_invalid_port() -> None:
 def test_transport_owns_client_and_session(monkeypatch: pytest.MonkeyPatch) -> None:
     session = _FakeSession()
     transport = TorcsScrTransport(session)  # type: ignore[arg-type]
-    monkeypatch.setattr(
-        "torcs_ai.envs.torcs_transport.Client", _FakeClient
-    )
+    monkeypatch.setattr("torcs_ai.envs.torcs_transport.Client", _FakeClient)
 
     initial = transport.reset()
     assert initial == {"speedX": 11.0}

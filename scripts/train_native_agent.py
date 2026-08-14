@@ -8,6 +8,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from torcs_ai.envs import validate_track_training_selection
+from torcs_ai.imitation import collect_expert_demonstrations
 from torcs_ai.rl import (
     build_multi_track_env,
     build_native_env,
@@ -15,7 +17,6 @@ from torcs_ai.rl import (
     train_ppo,
     write_json_atomic,
 )
-from torcs_ai.imitation import collect_expert_demonstrations
 
 
 def main() -> int:
@@ -71,18 +72,26 @@ def main() -> int:
         action="store_true",
         help="permit deliberately short runs that cannot support competitiveness claims",
     )
+    parser.add_argument(
+        "--allow-held-out-training",
+        action="store_true",
+        help="explicitly permit training on held-out tracks (marks run as contaminated)",
+    )
     args = parser.parse_args()
 
     if args.simulator_timeout_seconds <= 0.0:
         parser.error("--simulator-timeout-seconds must be positive")
     if args.target_kl <= 0.0:
         parser.error("--target-kl must be positive")
-    simulator_timeout_microseconds = int(
-        args.simulator_timeout_seconds * 1_000_000
-    )
+    simulator_timeout_microseconds = int(args.simulator_timeout_seconds * 1_000_000)
 
     tracks = args.tracks or []
     track_count = max(1, len(dict.fromkeys(tracks)))
+
+    validate_track_training_selection(
+        tracks, allow_held_out_training=args.allow_held_out_training
+    )
+
     if not args.allow_smoke_training:
         if args.max_steps < 5_000:
             parser.error("competitive training requires --max-steps >= 5000")
@@ -92,7 +101,37 @@ def main() -> int:
                 "episode per selected track; increase --timesteps or use "
                 "--allow-smoke-training for a non-competitive smoke run"
             )
+
+    output_dir = (
+        args.output
+        if args.output.is_dir() or "." not in args.output.name
+        else args.output.parent
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+    model_output_path = output_dir / (
+        args.output.name if "." not in args.output.name else args.output.stem
+    )
+
+    # Save resolved config.json
+    config_dict = {
+        "timesteps": args.timesteps,
+        "max_steps": args.max_steps,
+        "seed": args.seed,
+        "tracks": tracks or ["default"],
+        "n_steps": args.n_steps,
+        "batch_size": args.batch_size,
+        "learning_rate": args.learning_rate,
+        "target_kl": args.target_kl,
+        "teacher_guidance": args.teacher_guidance,
+        "expert_episodes": args.expert_episodes,
+        "allow_smoke_training": args.allow_smoke_training,
+        "allow_held_out_training": args.allow_held_out_training,
+    }
+    write_json_atomic(output_dir / "config.json", config_dict)
+
+    manifest_track: str | None
     if len(tracks) > 1:
+        manifest_track = "matrix"
         env = build_multi_track_env(
             args.torcs_home,
             args.runtime_home,
@@ -101,10 +140,11 @@ def main() -> int:
             overwrite_runtime=args.overwrite_runtime,
             teacher_guidance=args.teacher_guidance,
             simulator_timeout_microseconds=simulator_timeout_microseconds,
+            allow_held_out_training=args.allow_held_out_training,
         )
-        manifest_track = "matrix"
     else:
         track = tracks[0] if tracks else None
+        manifest_track = track
         env = build_native_env(
             args.torcs_home,
             args.runtime_home,
@@ -114,7 +154,7 @@ def main() -> int:
             teacher_guidance=args.teacher_guidance,
             simulator_timeout_microseconds=simulator_timeout_microseconds,
         )
-        manifest_track = track
+
     try:
         demonstrations = None
         if args.expert_episodes:
@@ -126,7 +166,7 @@ def main() -> int:
             )
         model = train_ppo(
             env,
-            args.output,
+            model_output_path,
             total_timesteps=args.timesteps,
             seed=args.seed,
             device=args.device,
@@ -141,6 +181,14 @@ def main() -> int:
             bc_learning_rate=args.bc_learning_rate,
         )
         bc_summary = getattr(model, "_torcs_bc_summary", None)
+        checkpoint_path = Path(
+            getattr(
+                model,
+                "_torcs_checkpoint_path",
+                str(model_output_path.with_suffix(".zip")),
+            )
+        )
+
         manifest = build_run_manifest(
             args.torcs_home,
             role="train",
@@ -148,6 +196,7 @@ def main() -> int:
             max_steps=args.max_steps,
             teacher_guidance=args.teacher_guidance,
             seed=args.seed,
+            checkpoint_path=checkpoint_path,
             training={
                 "algorithm": "PPO",
                 "total_timesteps": args.timesteps,
@@ -160,16 +209,15 @@ def main() -> int:
                 "tracks": tracks or [None],
                 "device": args.device,
                 "simulator_timeout_seconds": args.simulator_timeout_seconds,
-                "model_path": str(args.output.with_suffix(".zip")),
+                "model_path": str(checkpoint_path),
                 "expert_episodes": args.expert_episodes,
                 "expert_stride": args.expert_stride,
                 "behavior_cloning": bc_summary,
             },
         )
-        manifest_path = write_json_atomic(
-            args.output.with_suffix(".manifest.json"), manifest
-        )
+        manifest_path = write_json_atomic(output_dir / "manifest.json", manifest)
         print(f"run manifest: {manifest_path}")
+        print(f"model saved: {checkpoint_path}")
     finally:
         env.close()
     return 0

@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
+from tests.test_racing_env import FakeTransport
 from torcs_ai.envs import MultiTrackRacingEnv, RacingEnv
-
-from test_racing_env import FakeTransport
 
 
 def test_multi_track_selection_is_explicit_and_reported() -> None:

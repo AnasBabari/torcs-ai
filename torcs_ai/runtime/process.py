@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import os
 import subprocess
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path, PureWindowsPath
-from typing import Mapping, Optional, Sequence
+from typing import Any, Optional
 
 from .config import TorcsConfigurationError
 
@@ -14,7 +15,7 @@ from .config import TorcsConfigurationError
 def build_torcs_command(
     executable: Path,
     *,
-    race_config: Optional[str] = None,
+    race_config: str | None = None,
     text_only: bool = True,
     timeout_microseconds: int = 100_000,
     protocol_version: str = "2010",
@@ -40,8 +41,14 @@ def build_torcs_command(
     if no_lap_time:
         command.append("-nolaptime")
     if race_config is not None:
-        if not race_config.strip() or Path(race_config).is_absolute() or PureWindowsPath(race_config).is_absolute():
-            raise TorcsConfigurationError("race_config must be a non-empty relative path")
+        if (
+            not race_config.strip()
+            or Path(race_config).is_absolute()
+            or PureWindowsPath(race_config).is_absolute()
+        ):
+            raise TorcsConfigurationError(
+                "race_config must be a non-empty relative path"
+            )
         command.extend(["-r", race_config])
     return command
 
@@ -60,14 +67,16 @@ class TorcsProcess:
         command: Sequence[str],
         *,
         cwd: Path,
-        environment: Optional[Mapping[str, str]] = None,
+        environment: Mapping[str, str] | None = None,
         config: ProcessConfig = ProcessConfig(),
-        log_path: Optional[Path] = None,
+        log_path: Path | None = None,
     ) -> None:
         if not command:
             raise TorcsConfigurationError("TORCS command cannot be empty")
         if not cwd.is_dir():
-            raise TorcsConfigurationError(f"TORCS working directory does not exist: {cwd}")
+            raise TorcsConfigurationError(
+                f"TORCS working directory does not exist: {cwd}"
+            )
         if config.startup_timeout_seconds <= 0 or config.shutdown_timeout_seconds <= 0:
             raise TorcsConfigurationError("Process timeouts must be positive")
         self.command = tuple(str(value) for value in command)
@@ -75,11 +84,11 @@ class TorcsProcess:
         self.environment = dict(environment) if environment is not None else None
         self.config = config
         self.log_path = log_path
-        self._process: Optional[subprocess.Popen[bytes]] = None
-        self._log_handle = None
+        self._process: subprocess.Popen[bytes] | None = None
+        self._log_handle: Any = None
 
     @property
-    def pid(self) -> Optional[int]:
+    def pid(self) -> int | None:
         return self._process.pid if self._process is not None else None
 
     @property
@@ -93,7 +102,7 @@ class TorcsProcess:
         if self.environment is not None:
             environment.update(self.environment)
         creation_flags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
-        stdout = subprocess.DEVNULL
+        stdout: Any = subprocess.DEVNULL
         if self.log_path is not None:
             self.log_path.parent.mkdir(parents=True, exist_ok=True)
             self._log_handle = self.log_path.open("ab")
@@ -114,7 +123,7 @@ class TorcsProcess:
             raise
         return self._process.pid
 
-    def wait_for_exit(self, timeout_seconds: Optional[float] = None) -> int:
+    def wait_for_exit(self, timeout_seconds: float | None = None) -> int:
         if self._process is None:
             raise RuntimeError("TORCS process has not been started")
         timeout = timeout_seconds or self.config.startup_timeout_seconds
@@ -145,7 +154,7 @@ class TorcsProcess:
         finally:
             self._close_log_handle()
 
-    def __enter__(self) -> "TorcsProcess":
+    def __enter__(self) -> TorcsProcess:
         self.start()
         return self
 

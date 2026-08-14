@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from torcs_ai.controllers import decode_tactical_action
 from torcs_ai.client import Client, DriverAction, ServerState
+from torcs_ai.controllers import decode_tactical_action
 from torcs_ai.rl import build_native_env
 from torcs_ai.runtime.config import TorcsConfigurationError, TorcsInstallation
 from torcs_ai.runtime.manifest import (
@@ -52,7 +52,9 @@ def test_torcs_command_rejects_absolute_race_config() -> None:
         build_torcs_command(Path("wtorcs.exe"), race_config=r"C:\race.xml")
 
 
-def test_native_environment_rejects_nonpositive_simulator_timeout(tmp_path: Path) -> None:
+def test_native_environment_rejects_nonpositive_simulator_timeout(
+    tmp_path: Path,
+) -> None:
     with pytest.raises(ValueError, match="simulator_timeout_microseconds"):
         build_native_env(
             tmp_path / "missing-installation",

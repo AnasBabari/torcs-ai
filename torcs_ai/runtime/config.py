@@ -58,11 +58,13 @@ class TorcsInstallation:
         path = (self.tracks_dir / category / name).resolve()
         tracks_root = self.tracks_dir.resolve()
         if tracks_root not in path.parents:
-            raise TorcsConfigurationError("Track path escapes the TORCS tracks directory")
+            raise TorcsConfigurationError(
+                "Track path escapes the TORCS tracks directory"
+            )
         return path
 
 
-def resolve_torcs_home(value: Optional[Union[str, Path]] = None) -> Path:
+def resolve_torcs_home(value: str | Path | None = None) -> Path:
     """Resolve the native TORCS home from an argument, env var, or default."""
 
     raw_value = value if value is not None else os.environ.get(TORCS_HOME_ENV)
@@ -70,7 +72,7 @@ def resolve_torcs_home(value: Optional[Union[str, Path]] = None) -> Path:
     return home.expanduser().resolve()
 
 
-def resolve_installation(value: Optional[Union[str, Path]] = None) -> TorcsInstallation:
+def resolve_installation(value: str | Path | None = None) -> TorcsInstallation:
     """Resolve a ``TorcsInstallation`` without performing filesystem writes."""
 
     return TorcsInstallation(resolve_torcs_home(value))

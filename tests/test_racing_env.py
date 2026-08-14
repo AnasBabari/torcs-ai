@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping, Optional
+from collections.abc import Mapping
+from typing import Any, Optional
 
 import numpy as np
 
-from torcs_ai.envs import RacingEnv, default_low_level_controller
 from torcs_ai.controllers import TacticalIntent
+from torcs_ai.envs import RacingEnv, default_low_level_controller
 
 
 def _sensors(**overrides: Any) -> dict[str, Any]:
@@ -42,7 +43,7 @@ class FakeTransport:
         self.current = _sensors()
         self.controls: list[Mapping[str, float]] = []
 
-    def reset(self, *, seed: Optional[int] = None) -> Mapping[str, Any]:
+    def reset(self, *, seed: int | None = None) -> Mapping[str, Any]:
         self.current = _sensors()
         self.controls.clear()
         return self.current
@@ -72,7 +73,9 @@ def test_racing_env_observation_and_action_contract() -> None:
     assert not truncated
     assert step_info["tactical_action"] == 5
     assert transport.controls[-1]["accel"] >= 0.0
-    assert not (transport.controls[-1]["accel"] > 0 and transport.controls[-1]["brake"] > 0)
+    assert not (
+        transport.controls[-1]["accel"] > 0 and transport.controls[-1]["brake"] > 0
+    )
     env.close()
 
 

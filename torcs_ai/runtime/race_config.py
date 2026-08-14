@@ -50,7 +50,9 @@ def write_single_track_race_config(
     source = (runtime_home / Path(base_config.replace("\\", "/"))).resolve()
     destination = (runtime_home / Path(output_config.replace("\\", "/"))).resolve()
     if runtime_home not in source.parents or runtime_home not in destination.parents:
-        raise TorcsConfigurationError("race config must remain inside the staged runtime")
+        raise TorcsConfigurationError(
+            "race config must remain inside the staged runtime"
+        )
     if not source.is_file():
         raise TorcsConfigurationError(f"base race config does not exist: {source}")
     category, name = track.split("/", 1)
@@ -69,9 +71,9 @@ def write_single_track_race_config(
     # A generated single-track config is exclusively for the owned SCR client,
     # so convert only the focused index-0 driver and leave opponent entries
     # untouched.  This keeps the installed quick-race menu human-playable.
-    contents = _FOCUSED_HUMAN.sub(r'\g<prefix>scr_server\2', contents, count=1)
-    contents = _PLAYER_DRIVER.sub(r'\g<prefix>scr_server\g<suffix>', contents, count=1)
-    contents = _PLAYER_START.sub(r'\g<prefix>scr_server\g<suffix>', contents, count=1)
+    contents = _FOCUSED_HUMAN.sub(r"\g<prefix>scr_server\2", contents, count=1)
+    contents = _PLAYER_DRIVER.sub(r"\g<prefix>scr_server\g<suffix>", contents, count=1)
+    contents = _PLAYER_START.sub(r"\g<prefix>scr_server\g<suffix>", contents, count=1)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(contents, encoding="utf-8", newline="\n")
     # Return a path that composes correctly on both Windows and POSIX callers.

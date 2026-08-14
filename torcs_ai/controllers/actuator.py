@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Mapping
+from collections.abc import Mapping
 
 import numpy as np
 
@@ -46,7 +46,9 @@ def apply_slew_limiter(
             raise ValueError(f"slew rate for {key} must be finite and positive")
         prior = float(previous.get(key, 0.0))
         delta = float(np.clip(raw[key] - prior, -rate, rate))
-        result[key] = float(np.clip(prior + delta, -1.0 if key == "steer" else 0.0, 1.0))
+        result[key] = float(
+            np.clip(prior + delta, -1.0 if key == "steer" else 0.0, 1.0)
+        )
         limited = limited or not np.isclose(delta, raw[key] - prior)
 
     # Gear is discrete in TORCS and is not slew-limited.

@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   python:
-    name: Python ${{ matrix.python-version }}
+    name: Hosted Linux CI (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -23,23 +23,38 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v5
 
-      - name: Set up Python
+      - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
-      - name: Install dependencies
+      - name: Upgrade pip and install package with dev/RL extras
         run: |
-          python -m pip install --upgrade pip
-          python -m pip install -r requirements.txt
-          python -m pip install pytest pytest-cov
+          python -m pip install --upgrade pip build
+          python -m pip install -e ".[dev,analysis,viz,rl]"
 
       - name: Compile Python sources
         run: python -m compileall -q torcs_ai tests scripts
 
-      - name: Run tests without generated coverage files
-        run: python -m pytest -o addopts='' -q
+      - name: Lint and formatting checks (Ruff)
+        run: |
+          ruff check .
+          ruff format --check .
 
-      - name: Build package
-        run: python -m pip install . --no-deps
+      - name: Type checking (Mypy)
+        run: mypy torcs_ai scripts
+
+      - name: Run unit & environment contract tests with coverage floor
+        run: python -m pytest
+
+      - name: Validate PEP 517/518 build and install
+        run: |
+          python -m build --sdist --wheel
+          python -m pip install dist/*.whl --force-reinstall --no-deps
+          torcs-ai doctor --help
+
+      - name: Release Gate Notice
+        run: |
+          echo "Hosted Linux CI validates all Python contracts, schemas, models, and mock environments."
+          echo "Native Windows TORCS execution (process ownership, isolated staging, SCR handshake, and physics) is verified via local Windows release gate: scripts/verify_native_release.ps1"

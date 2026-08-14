@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import numpy as np
 
 from .actions import TacticalAction
-
 
 # The forward-ray estimator is intentionally conservative on Forza.  Its
 # corners close earlier than the other bundled benchmark tracks, so using the
@@ -73,9 +73,7 @@ def track_speed_limit(
         # Lower the floor only for the audited track profile; the generic
         # controller remains unchanged for unknown and other known tracks.
         ceiling = min(ceiling, 30.0 + 2.5 * forward_min)
-    return float(
-        np.clip(ceiling, 30.0 if sharp_turn_braking else 80.0, 300.0)
-    )
+    return float(np.clip(ceiling, 30.0 if sharp_turn_braking else 80.0, 300.0))
 
 
 def expert_tactical_action(

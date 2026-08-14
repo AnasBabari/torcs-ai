@@ -25,14 +25,14 @@ def main(argv: list[str] | None = None) -> int:
         installation = resolve_installation(args.torcs_home)
         manifest = inspect_installation(installation)
     except (OSError, ValueError, TorcsInstallationError) as exc:
-        payload = {"status": "failed", "error": str(exc)}
+        err_payload: dict[str, object] = {"status": "failed", "error": str(exc)}
         if args.as_json:
-            print(json.dumps(payload, sort_keys=True))
+            print(json.dumps(err_payload, sort_keys=True))
         else:
             print(f"TORCS doctor failed: {exc}", file=sys.stderr)
         return 1
 
-    payload = {"status": "ok", "manifest": manifest.to_dict()}
+    payload: dict[str, object] = {"status": "ok", "manifest": manifest.to_dict()}
     if args.as_json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:

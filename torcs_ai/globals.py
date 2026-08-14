@@ -7,7 +7,8 @@ names while deferring construction until a caller explicitly uses them.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Generic, Optional, TypeVar
+from collections.abc import Callable
+from typing import Any, Generic, Optional, TypeVar
 
 T = TypeVar("T")
 
@@ -17,7 +18,7 @@ class LazyInstance(Generic[T]):
 
     def __init__(self, factory: Callable[[], T]) -> None:
         self._factory = factory
-        self._instance: Optional[T] = None
+        self._instance: T | None = None
 
     def _get(self) -> T:
         if self._instance is None:

@@ -35,8 +35,8 @@ class TorcsSession:
         self.source = source
         self.runtime_home = runtime_home.expanduser().resolve()
         self.config = config
-        self.manifest: Optional[InstallationManifest] = None
-        self.process: Optional[TorcsProcess] = None
+        self.manifest: InstallationManifest | None = None
+        self.process: TorcsProcess | None = None
 
     @property
     def running(self) -> bool:

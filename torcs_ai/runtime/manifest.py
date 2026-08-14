@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import xml.etree.ElementTree as ET
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
 
-from .config import TorcsInstallation, TorcsConfigurationError
+from .config import TorcsConfigurationError, TorcsInstallation
 
 DEFAULT_TRACKS: tuple[tuple[str, str], ...] = (
     ("road", "alpine-1"),
@@ -54,7 +54,9 @@ def _count_scr_slots(path: Path) -> int:
     try:
         root = ET.parse(path).getroot()
     except (ET.ParseError, OSError) as exc:
-        raise TorcsInstallationError(f"Cannot parse SCR configuration {path}: {exc}") from exc
+        raise TorcsInstallationError(
+            f"Cannot parse SCR configuration {path}: {exc}"
+        ) from exc
     slots = root.findall(".//section[@name='index']/section")
     return len(slots)
 
@@ -117,9 +119,7 @@ def inspect_installation(
         track_evidence[f"{category}/{name}"] = sha256_file(xml_path)
 
     missing_opponents = [
-        name
-        for name in opponents
-        if not (installation.drivers_dir / name).is_dir()
+        name for name in opponents if not (installation.drivers_dir / name).is_dir()
     ]
     if missing_opponents:
         raise TorcsInstallationError(

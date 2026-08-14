@@ -43,7 +43,9 @@ def decode_tactical_action(
     try:
         action_enum = TacticalAction(action)
     except (TypeError, ValueError) as exc:
-        raise ValueError(f"action must be an integer in [0, 8], got {action!r}") from exc
+        raise ValueError(
+            f"action must be an integer in [0, 8], got {action!r}"
+        ) from exc
 
     lateral_index, pace_index = divmod(int(action_enum), 3)
     lateral_targets = (left_target, center_target, right_target)

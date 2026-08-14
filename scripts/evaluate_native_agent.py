@@ -13,6 +13,7 @@ from torcs_ai.rl import (
     build_native_env,
     build_run_manifest,
     evaluate_policy,
+    summarize_evaluation,
     write_json_atomic,
 )
 
@@ -41,25 +42,31 @@ def main() -> int:
     except ImportError as exc:  # pragma: no cover - optional RL dependency
         raise SystemExit("evaluate_native_agent requires the 'rl' extra") from exc
 
+    # Ensure teacher_guidance is strictly 0.0 for evaluation
     env = build_native_env(
         args.torcs_home,
         args.runtime_home,
         max_steps=args.max_steps,
         track=args.track,
         overwrite_runtime=args.overwrite_runtime,
+        teacher_guidance=0.0,
         text_only=not args.visual,
     )
     try:
         model = PPO.load(str(args.model), env=env)
         results = evaluate_policy(env, model, episodes=args.episodes)
+        summary = summarize_evaluation(results)
         payload = {
             "results": results,
+            "summary": summary,
             "manifest": build_run_manifest(
                 args.torcs_home,
                 role="evaluate",
                 track=args.track,
                 max_steps=args.max_steps,
-                results=results,
+                teacher_guidance=0.0,
+                checkpoint_path=args.model if args.model.is_file() else None,
+                results={"summary": summary, "episodes": results},
             ),
         }
         if args.output is not None:

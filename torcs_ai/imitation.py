@@ -30,7 +30,7 @@ class ExpertDemonstrations:
 
     @property
     def action_counts(self) -> list[int]:
-        return np.bincount(self.actions, minlength=9).astype(int).tolist()
+        return [int(x) for x in np.bincount(self.actions, minlength=9)]
 
 
 def _active_racing_env(env: Any) -> Any:
@@ -72,7 +72,9 @@ def collect_expert_demonstrations(
                     sharp_turn_braking=getattr(active, "sharp_turn_braking", False),
                 )
                 if step % sample_stride == 0:
-                    observations.append(np.asarray(observation, dtype=np.float32).copy())
+                    observations.append(
+                        np.asarray(observation, dtype=np.float32).copy()
+                    )
                     actions.append(action)
                 observation, _, terminated, truncated, _ = env.step(action)
                 step += 1
@@ -135,10 +137,14 @@ def behavior_clone_ppo_policy(
             final_loss = float(loss.detach().cpu())
     policy.eval()
     with torch.no_grad():
-        predicted = policy.get_distribution(observations).distribution.probs.argmax(dim=1)
+        predicted = policy.get_distribution(observations).distribution.probs.argmax(
+            dim=1
+        )
         accuracy = float((predicted == actions).float().mean().cpu())
         per_action_accuracy = {
-            str(action): float((predicted[actions == action] == action).float().mean().cpu())
+            str(action): float(
+                (predicted[actions == action] == action).float().mean().cpu()
+            )
             for action in range(9)
             if bool((actions == action).any())
         }

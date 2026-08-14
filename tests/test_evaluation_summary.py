@@ -7,10 +7,13 @@ import pytest
 from torcs_ai.rl import compare_with_expert, summarize_evaluation, train_ppo
 
 
-def _episode(*, action: int, damage_per_km: float = 10.0, steps: int = 100) -> dict:
+def _episode(
+    *, action: int, damage_per_km: float = 10.0, steps: int = 100, reward: float = 100.0
+) -> dict:
     counts = [0] * 9
     counts[action] = steps
     return {
+        "reward": reward,
         "finish": True,
         "steps": steps,
         "race_position": 1,
@@ -40,4 +43,4 @@ def test_competitiveness_requires_diversity_damage_and_pace() -> None:
 
 def test_training_rejects_nonpositive_target_kl() -> None:
     with pytest.raises(ValueError, match="target_kl"):
-        train_ppo(object(), Path("unused"), target_kl=0.0)  # type: ignore[arg-type]
+        train_ppo(object(), Path("unused"), target_kl=0.0)

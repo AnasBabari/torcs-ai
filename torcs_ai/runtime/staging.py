@@ -14,7 +14,7 @@ def stage_installation(
     destination: Path,
     *,
     overwrite: bool = False,
-    ignore_names: Optional[set[str]] = None,
+    ignore_names: set[str] | None = None,
 ) -> Path:
     """Copy a TORCS installation into a private runtime directory.
 
@@ -26,7 +26,9 @@ def stage_installation(
     source = source.expanduser().resolve()
     destination = destination.expanduser().resolve()
     if not source.is_dir():
-        raise TorcsConfigurationError(f"TORCS source directory does not exist: {source}")
+        raise TorcsConfigurationError(
+            f"TORCS source directory does not exist: {source}"
+        )
     if (
         destination == source
         or source in destination.parents
@@ -39,7 +41,9 @@ def stage_installation(
         if not overwrite:
             raise FileExistsError(f"staging destination already exists: {destination}")
         if not destination.is_dir():
-            raise TorcsConfigurationError(f"staging destination is not a directory: {destination}")
+            raise TorcsConfigurationError(
+                f"staging destination is not a directory: {destination}"
+            )
         shutil.rmtree(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     ignored = set(ignore_names or ())

@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from test_racing_env import FakeTransport
+from tests.test_racing_env import FakeTransport
 from torcs_ai.envs import RacingEnv
 from torcs_ai.imitation import (
     ExpertDemonstrations,

@@ -8,9 +8,9 @@ starting a simulator is an explicit operation performed by a caller.
 from .config import TorcsInstallation, resolve_installation, resolve_torcs_home
 from .manifest import InstallationManifest, inspect_installation
 from .process import TorcsProcess, build_torcs_command
-from .staging import stage_installation
-from .session import SessionConfig, TorcsSession
 from .race_config import write_single_track_race_config
+from .session import SessionConfig, TorcsSession
+from .staging import stage_installation
 
 __all__ = [
     "InstallationManifest",

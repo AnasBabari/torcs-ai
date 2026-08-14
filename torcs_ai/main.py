@@ -1,192 +1,211 @@
-#!/usr/bin/env python3
-"""
-TORCS Racing AI - Main Entry Point
+"""TORCS AI - Unified CLI entry point for research tooling and runtime verification."""
 
-A sophisticated machine learning-based racing AI for TORCS (The Open Racing Car Simulator).
-Features advanced neural networks, automated training, real-time visualization, and continuous learning.
-"""
+from __future__ import annotations
 
+import argparse
+import json
 import logging
 import sys
-import time
+from pathlib import Path
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("torcs_ai")
 
 
-def main():
-    """Main entry point for TORCS Racing AI."""
+def cmd_doctor(args: argparse.Namespace) -> int:
+    from scripts.torcs_doctor import main as doctor_main
+
+    argv = []
+    if args.torcs_home:
+        argv.extend(["--torcs-home", str(args.torcs_home)])
+    if args.as_json:
+        argv.append("--json")
+    return doctor_main(argv)
+
+
+def cmd_probe(args: argparse.Namespace) -> int:
+    from scripts.native_smoke import main as smoke_main
+
+    argv = ["--steps", str(args.steps)]
+    if args.torcs_home:
+        argv.extend(["--torcs-home", str(args.torcs_home)])
+    if args.runtime_home:
+        argv.extend(["--runtime-home", str(args.runtime_home)])
+    if args.track:
+        argv.extend(["--track", str(args.track)])
+    if args.as_json:
+        argv.append("--json")
+    return smoke_main(argv)
+
+
+def cmd_train(args: argparse.Namespace) -> int:
+    from scripts.train_native_agent import main as train_main
+
+    argv = [
+        "--timesteps",
+        str(args.timesteps),
+        "--max-steps",
+        str(args.max_steps),
+        "--output",
+        str(args.output),
+        "--seed",
+        str(args.seed),
+    ]
+    if args.torcs_home:
+        argv.extend(["--torcs-home", str(args.torcs_home)])
+    if args.tracks:
+        for t in args.tracks:
+            argv.extend(["--track", t])
+    if args.teacher_guidance > 0.0:
+        argv.extend(["--teacher-guidance", str(args.teacher_guidance)])
+    if args.expert_episodes > 0:
+        argv.extend(["--expert-episodes", str(args.expert_episodes)])
+    if args.allow_smoke_training:
+        argv.append("--allow-smoke-training")
+    if args.allow_held_out_training:
+        argv.append("--allow-held-out-training")
+    sys.argv = [sys.argv[0]] + argv
+    return train_main()
+
+
+def cmd_evaluate(args: argparse.Namespace) -> int:
+    from scripts.evaluate_native_agent import main as eval_main
+
+    argv = [
+        "--model",
+        str(args.model),
+        "--episodes",
+        str(args.episodes),
+        "--max-steps",
+        str(args.max_steps),
+    ]
+    if args.torcs_home:
+        argv.extend(["--torcs-home", str(args.torcs_home)])
+    if args.track:
+        argv.extend(["--track", str(args.track)])
+    sys.argv = [sys.argv[0]] + argv
+    return eval_main()
+
+
+def cmd_benchmark(args: argparse.Namespace) -> int:
+    from scripts.benchmark_native import main as bench_main
+
+    argv = [
+        "--model",
+        str(args.model),
+        "--episodes",
+        str(args.episodes),
+        "--max-steps",
+        str(args.max_steps),
+    ]
+    if args.torcs_home:
+        argv.extend(["--torcs-home", str(args.torcs_home)])
+    if args.tracks:
+        for t in args.tracks:
+            argv.extend(["--track", t])
+    if args.output:
+        argv.extend(["--output", str(args.output)])
+    sys.argv = [sys.argv[0]] + argv
+    return bench_main()
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    manifest_path = Path(args.manifest)
+    if not manifest_path.is_file():
+        print(f"Error: manifest file not found at {manifest_path}", file=sys.stderr)
+        return 1
+    with manifest_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    print(json.dumps(data, indent=2))
+    return 0
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="torcs-ai",
+        description="Hierarchical Reinforcement Learning Racing Agent for native TORCS",
+    )
+    subparsers = parser.add_subparsers(dest="subcommand", help="Available subcommands")
+
+    # doctor
+    p_doc = subparsers.add_parser("doctor", help="Verify native TORCS installation")
+    p_doc.add_argument("--torcs-home", type=Path, default=None)
+    p_doc.add_argument("--json", action="store_true", dest="as_json")
+    p_doc.set_defaults(func=cmd_doctor)
+
+    # probe
+    p_probe = subparsers.add_parser(
+        "probe", help="Run bounded native staging and SCR handshake probe"
+    )
+    p_probe.add_argument("--torcs-home", type=Path, default=None)
+    p_probe.add_argument("--runtime-home", type=Path, default=None)
+    p_probe.add_argument("--track", type=str, default="road/alpine-1")
+    p_probe.add_argument("--steps", type=int, default=500)
+    p_probe.add_argument("--json", action="store_true", dest="as_json")
+    p_probe.set_defaults(func=cmd_probe)
+
+    # train
+    p_train = subparsers.add_parser(
+        "train", help="Train PPO policy against native TORCS"
+    )
+    p_train.add_argument("--torcs-home", type=Path, default=None)
+    p_train.add_argument("--output", type=Path, default=Path("runs") / "ppo_native")
+    p_train.add_argument("--timesteps", type=int, default=100_000)
+    p_train.add_argument("--max-steps", type=int, default=15_000)
+    p_train.add_argument("--seed", type=int, default=7)
+    p_train.add_argument("--track", action="append", dest="tracks")
+    p_train.add_argument("--teacher-guidance", type=float, default=0.0)
+    p_train.add_argument("--expert-episodes", type=int, default=0)
+    p_train.add_argument("--allow-smoke-training", action="store_true")
+    p_train.add_argument("--allow-held-out-training", action="store_true")
+    p_train.set_defaults(func=cmd_train)
+
+    # evaluate
+    p_eval = subparsers.add_parser(
+        "evaluate", help="Evaluate trained policy on native track"
+    )
+    p_eval.add_argument("--torcs-home", type=Path, default=None)
+    p_eval.add_argument("--model", type=Path, required=True)
+    p_eval.add_argument("--track", type=str, default=None)
+    p_eval.add_argument("--episodes", type=int, default=3)
+    p_eval.add_argument("--max-steps", type=int, default=15_000)
+    p_eval.set_defaults(func=cmd_evaluate)
+
+    # benchmark
+    p_bench = subparsers.add_parser(
+        "benchmark",
+        help="Run multi-track benchmark comparing PPO, baseline, and expert",
+    )
+    p_bench.add_argument("--torcs-home", type=Path, default=None)
+    p_bench.add_argument("--model", type=Path, required=True)
+    p_bench.add_argument("--track", action="append", dest="tracks")
+    p_bench.add_argument("--episodes", type=int, default=3)
+    p_bench.add_argument("--max-steps", type=int, default=15_000)
+    p_bench.add_argument("--output", type=Path, default=None)
+    p_bench.set_defaults(func=cmd_benchmark)
+
+    # report
+    p_rep = subparsers.add_parser(
+        "report", help="Inspect run manifest and evaluation report"
+    )
+    p_rep.add_argument("--manifest", type=Path, required=True)
+    p_rep.set_defaults(func=cmd_report)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(levelname)s - %(message)s',
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         handlers=[logging.StreamHandler(sys.stdout)],
     )
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-
-        if command == 'analyze':
-            from torcs_ai.utils import analyze_ml_models, generate_racing_insights
-
-            # Run analysis mode
-            logger.info("🔍 Running ML model analysis...")
-            analyze_ml_models()
-            generate_racing_insights()
-
-        elif command == 'train':
-            from torcs_ai.training import automated_training_pipeline
-
-            # Automated training pipeline
-            num_races = int(sys.argv[2]) if len(sys.argv) > 2 else 10
-            logger.info(f"🚀 Starting automated training pipeline with {num_races} races...")
-            stats = automated_training_pipeline(num_races=num_races)
-            logger.info(f"✅ Training completed. Stats: {stats}")
-
-        elif command == 'continuous':
-            from torcs_ai.training import continuous_learning_mode
-
-            # Continuous learning mode
-            max_races = int(sys.argv[2]) if len(sys.argv) > 2 else 50
-            threshold = float(sys.argv[3]) if len(sys.argv) > 3 else 0.5
-            logger.info(f"🔄 Starting continuous learning (max {max_races} races, threshold {threshold})...")
-            stats = continuous_learning_mode(max_races=max_races, performance_threshold=threshold)
-            logger.info(f"✅ Continuous learning completed. Stats: {stats}")
-
-        elif command == 'perfection':
-            from torcs_ai.training import perfection_training_pipeline
-
-            # Ultimate perfection training
-            logger.info("🏆 Starting perfection training pipeline...")
-            stats = perfection_training_pipeline()
-            logger.info(f"✅ Perfection training completed. Stats: {stats}")
-
-        elif command == 'elite':
-            from torcs_ai.training import elite_training_curriculum
-
-            # Elite curriculum training
-            logger.info("👑 Starting elite curriculum training...")
-            stats = elite_training_curriculum()
-            logger.info(f"✅ Elite training completed. Stats: {stats}")
-
-        elif command == 'intensive':
-            from torcs_ai.training import intensive_training_session
-
-            # Intensive training session
-            intensity = sys.argv[2] if len(sys.argv) > 2 else 'extreme'
-            logger.info(f"🔥 Starting intensive training ({intensity})...")
-            stats = intensive_training_session(intensity_level=intensity)
-            logger.info(f"✅ Intensive training completed. Stats: {stats}")
-
-        elif command == 'demo':
-            from torcs_ai.globals import ml_racing_ai, visualizer
-
-            # Demo mode - show training capabilities without TORCS
-            print("🎯 TORCS ML Racing AI - Advanced Training Demo")
-            print("="*60)
-            print("🚀 Available Training Modes:")
-            print("   1. analyze          - Analyze current ML models")
-            print("   2. train N          - Run automated training pipeline (N races)")
-            print("   3. continuous N T   - Continuous learning until performance T")
-            print("   4. perfection       - Ultimate perfection training")
-            print("   5. elite           - Elite curriculum training")
-            print("   6. intensive L     - Intensive training (L=moderate/extreme/insane)")
-            print("   7. demo            - Show this demo")
-            print("   8. help            - Show usage instructions")
-            print()
-            print("🤖 Advanced Features:")
-            print("   • Deep Neural Networks (PyTorch)")
-            print("   • Deep Q-Learning for decision making")
-            print("   • Real-time visualization and analytics")
-            print("   • Adaptive exploration and learning")
-            print("   • Scenario-aware driving strategies")
-            print("   • Comprehensive performance tracking")
-            print()
-            print("📊 Current Status:")
-            print(f"   • ML Models: {'LOADED' if ml_racing_ai.is_trained else 'NOT TRAINED'}")
-            print(f"   • Training Data: {len(ml_racing_ai.data_collector.experiences)} experiences")
-            print(f"   • Performance Data: {len(visualizer.performance_data)} points")
-            print()
-            print("💡 To start automated training:")
-            print("   1. Start TORCS server")
-            print("   2. Run: python -m torcs_ai.main train 5")
-            print("   3. Watch the AI learn and improve automatically!")
-            print("="*60)
-
-        elif command == 'help':
-            print("🏎️  TORCS ML Racing AI - Advanced Usage Guide")
-            print("="*55)
-            print("python -m torcs_ai.main              # Run single race")
-            print("python -m torcs_ai.main analyze      # Analyze current models")
-            print("python -m torcs_ai.main train [N]    # Automated training (N races)")
-            print("python -m torcs_ai.main continuous [N] [T]  # Continuous learning")
-            print("                                      # N=max races, T=performance threshold")
-            print("python -m torcs_ai.main perfection   # Ultimate perfection training")
-            print("python -m torcs_ai.main elite        # Elite curriculum training")
-            print("python -m torcs_ai.main intensive [L] # Intensive training (L=moderate/hard/extreme/insane)")
-            print("python -m torcs_ai.main demo         # Show training capabilities")
-            print("python -m torcs_ai.main help         # Show this help")
-            print()
-            print("🎯 Advanced Features:")
-            print("   • Neural Network Models with PyTorch")
-            print("   • Deep Reinforcement Learning")
-            print("   • Real-time Performance Visualization")
-            print("   • Adaptive Learning Strategies")
-            print("   • Comprehensive Analytics and Insights")
-            print("   • Automated Server Management")
-            print("="*55)
-
-        else:
-            print(f"❌ Unknown command: {command}")
-            print("Use 'python -m torcs_ai.main demo' for available options.")
-
-    else:
-        from torcs_ai.client import Client
-        from torcs_ai.globals import ml_racing_ai, visualizer
-        from torcs_ai.training import drive_modular
-        from torcs_ai.utils import analyze_ml_models, generate_racing_insights
-
-        # Run racing mode (default)
-        logger.info("🏎️ Starting Advanced Machine Learning Racing AI...")
-        logger.info("🤖 Neural Networks: LOADED")
-        logger.info("📊 Real-time Analytics: ENABLED")
-        logger.info("🎯 Target: Ultimate racing performance with continuous learning")
-
-        try:
-            C = Client(port=3001)
-            race_start_time = time.time()
-
-            for step in range(C.maxSteps, 0, -1):
-                C.get_servers_input()
-                drive_modular(C)
-                C.respond_to_server()
-
-                # Periodic analysis
-                if step % 1000 == 0:
-                    progress = (C.maxSteps - step) / C.maxSteps * 100
-                    elapsed = time.time() - race_start_time
-                    logger.info("Progress %.1f%%; elapsed %.1fs", progress, elapsed)
-
-            C.shutdown()
-
-            race_time = time.time() - race_start_time
-            logger.info("Race finished in %.2fs", race_time)
-
-            # Final analysis
-            logger.info("🏁 RACE COMPLETE - Generating final analysis...")
-            analyze_ml_models()
-            generate_racing_insights()
-
-            # Save race data
-            visualizer.save_data_to_csv('race_data.csv')
-            visualizer.plot_comprehensive_analysis('final_race_analysis.png')
-            visualizer.create_interactive_dashboard('final_race_dashboard.html')
-
-            logger.info("✅ Race completed successfully!")
-
-        except KeyboardInterrupt:
-            logger.info("🛑 Race interrupted by user")
-        except Exception as e:
-            logger.error(f"❌ Error during race: {e}")
-            raise
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if not hasattr(args, "func"):
+        parser.print_help()
+        return 0
+    return int(args.func(args))
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

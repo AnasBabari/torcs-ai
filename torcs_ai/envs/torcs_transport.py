@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Any, Mapping, Optional
+from typing import Any, Optional
 
 from ..client import Client
 from ..runtime.session import TorcsSession
@@ -52,7 +53,7 @@ class TorcsScrTransport:
     ) -> None:
         self.session = session
         self.config = config
-        self.client: Optional[Client] = None
+        self.client: Client | None = None
         self._started_session = False
         self._steps = 0
 
@@ -75,7 +76,7 @@ class TorcsScrTransport:
     def _snapshot(client: Client) -> dict[str, Any]:
         return dict(client.S.d)
 
-    def reset(self, *, seed: Optional[int] = None) -> Mapping[str, Any]:
+    def reset(self, *, seed: int | None = None) -> Mapping[str, Any]:
         """Start/reconnect one SCR client and return the first telemetry packet."""
 
         del seed  # TORCS itself is seeded by the selected race configuration.
@@ -143,7 +144,7 @@ class TorcsScrTransport:
             self.session.stop()
             self._started_session = False
 
-    def __enter__(self) -> "TorcsScrTransport":
+    def __enter__(self) -> TorcsScrTransport:
         return self
 
     def __exit__(self, exc_type: object, exc: object, traceback: object) -> None:

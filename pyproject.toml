@@ -1,57 +1,188 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "torcs-ai"
+version = "2.1.0a1"
+description = "Research tooling for native Windows TORCS reinforcement learning racing agents"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [
+    { name = "Anas Babari" },
+    { name = "naoto yoshida" }
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Games/Entertainment :: Simulation",
+]
+dependencies = [
+    "torch>=2.2,<3",
+    "numpy>=1.24,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=6.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.10",
+]
+analysis = [
+    "pandas>=2.0,<3",
+    "scikit-learn>=1.3,<2",
+    "psutil>=5.9,<7",
+]
+viz = [
+    "matplotlib>=3.7,<4",
+    "plotly>=5.18,<7",
+    "tqdm>=4.66,<5",
+]
+rl = [
+    "gymnasium>=0.29,<1.1",
+    "stable-baselines3>=2.3,<3",
+]
+gpu = [
+    "torch>=2.2,<3",
+]
+
+[project.scripts]
+torcs-ai = "torcs_ai.main:main"
+
+[tool.setuptools.packages.find]
+include = ["torcs_ai*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = ["-v", "--tb=short", "--cov=torcs_ai", "--cov-report=html", "--cov-report=term-missing"]
+addopts = ["-v", "--tb=short", "--cov=torcs_ai", "--cov-report=term-missing"]
 
-[tool.black]
+[tool.coverage.run]
+source = ["torcs_ai"]
+omit = [
+    "*/tests/*",
+    "*/vtorcs-RL-color/*",
+    "torcs_ai/visualization.py",
+    "torcs_ai/utils.py",
+    "torcs_ai/training.py",
+    "torcs_ai/ml_models.py",
+    "torcs_ai/globals.py"
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "except ImportError:",
+]
+
+[tool.ruff]
+target-version = "py311"
 line-length = 88
-target-version = ["py38"]
-include = "\\.pyi?$"
-extend-exclude = '''
-/(
-  # directories
-  \\.eggs
-  | \\.git
-  | \\.hg
-  | \\.mypy_cache
-  | \\.tox
-  | \\.venv
-  | build
-  | dist
-)/
-'''
+include = ["torcs_ai/**/*.py", "tests/**/*.py", "scripts/**/*.py"]
+exclude = [
+    ".git",
+    ".venv",
+    ".runtime",
+    "runs",
+    "build",
+    "dist",
+    "vtorcs-RL-color",
+    "torcs_jm_par.py",
+    "jmcncarai.py",
+    "snakeoil3_gym.py",
+    "snakeoil3_jm2.py",
+    "gym_torcs.py",
+    "sample_agent.py",
+    "demo_ml_ai.py",
+    "example_experiment.py"
+]
 
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-line_length = 88
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501", "F401", "E402", "UP031"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["torcs_ai"]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
+explicit_package_bases = true
+exclude = [
+    "^gym_torcs\\.py$",
+    "^snakeoil3_.*\\.py$",
+    "^jmcncarai\\.py$",
+    "^sample_agent\\.py$",
+    "^torcs_jm_par\\.py$",
+    "^demo_ml_ai\\.py$",
+    "^example_experiment\\.py$",
+]
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
-disallow_incomplete_defs = true
 check_untyped_defs = true
-disallow_untyped_decorators = true
 no_implicit_optional = true
 warn_redundant_casts = true
 warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
 strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "torcs_ai.ml_models",
+    "torcs_ai.ml_models.*",
+    "torcs_ai.training",
+    "torcs_ai.training.*",
+    "torcs_ai.utils",
+    "torcs_ai.utils.*",
+    "torcs_ai.visualization",
+    "torcs_ai.visualization.*",
+    "torcs_ai.globals",
+    "torcs_ai.globals.*",
+    "tests.*",
+    "gym_torcs",
+    "snakeoil3_gym",
+    "snakeoil3_jm2",
+    "jmcncarai",
+    "sample_agent",
+    "torcs_jm_par",
+    "demo_ml_ai",
+    "example_experiment",
+]
+ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = [
     "matplotlib.*",
     "plotly.*",
     "sklearn.*",
-    "torch.*"
+    "torch.*",
+    "torch.nn.*",
+    "torch.nn.functional.*",
+    "torch.optim.*",
+    "gymnasium.*",
+    "gymnasium.spaces.*",
+    "gymnasium.utils.env_checker.*",
+    "stable_baselines3.*",
+    "stable_baselines3.common.*",
+    "stable_baselines3.common.callbacks.*",
+    "psutil.*",
+    "scipy.*",
+    "pandas.*",
+    "tqdm.*"
 ]
 ignore_missing_imports = true
-
-[build-system]
-requires = ["setuptools>=45", "wheel"]
-build-backend = "setuptools.build_meta"

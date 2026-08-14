@@ -10,14 +10,16 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from torcs_ai.client import Client  # noqa: E402
-from torcs_ai.runtime import TorcsSession  # noqa: E402
+from torcs_ai.runtime import SessionConfig, TorcsSession  # noqa: E402
 from torcs_ai.runtime.config import resolve_installation  # noqa: E402
+from torcs_ai.runtime.race_config import write_single_track_race_config  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--torcs-home", type=Path, default=None)
     parser.add_argument("--runtime-home", type=Path, default=None)
+    parser.add_argument("--track", type=str, default="road/alpine-1")
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args(argv)
@@ -25,19 +27,27 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--steps must be positive")
 
     source = resolve_installation(args.torcs_home)
-    runtime_home = args.runtime_home or Path(__file__).resolve().parents[1] / ".runtime" / "native-smoke"
-    session = TorcsSession(source, runtime_home)
+    runtime_home = (
+        args.runtime_home
+        or Path(__file__).resolve().parents[1] / ".runtime" / "native-smoke"
+    )
+    session = TorcsSession(
+        source,
+        runtime_home,
+        config=SessionConfig(race_config=r"config\raceman\codex-race.xml"),
+    )
     client: Client | None = None
     completed_steps = 0
     max_distance = 0.0
     try:
         manifest = session.prepare(overwrite=True)
+        write_single_track_race_config(session.runtime_home, args.track)
         session.start()
         client = Client(
             host="127.0.0.1",
             port=3001,
-            connect_attempts=20,
-            connect_timeout=0.75,
+            connect_attempts=25,
+            connect_timeout=1.0,
         )
         for _ in range(args.steps):
             client.get_servers_input()
@@ -45,7 +55,14 @@ def main(argv: list[str] | None = None) -> int:
                 break
             state = client.S.d
             max_distance = max(max_distance, float(state.get("distRaced", 0.0)))
-            steer = max(-1.0, min(1.0, float(state.get("angle", 0.0)) * 2.0 + float(state.get("trackPos", 0.0)) * 0.5))
+            steer = max(
+                -1.0,
+                min(
+                    1.0,
+                    float(state.get("angle", 0.0)) * 2.0
+                    + float(state.get("trackPos", 0.0)) * 0.5,
+                ),
+            )
             client.R.d.update({"steer": steer, "accel": 0.25, "brake": 0.0, "gear": 1})
             client.respond_to_server()
             completed_steps += 1
@@ -63,6 +80,7 @@ def main(argv: list[str] | None = None) -> int:
 
     payload = {
         "status": "ok",
+        "track": args.track,
         "steps": completed_steps,
         "requested_steps": args.steps,
         "max_distance": max_distance,
@@ -73,8 +91,10 @@ def main(argv: list[str] | None = None) -> int:
     if args.as_json:
         print(json.dumps(payload, indent=2, sort_keys=True))
     else:
-        print(f"native smoke passed: {completed_steps}/{args.steps} steps")
-        print(f"max distance: {max_distance:.3f}")
+        print(
+            f"native smoke passed: {completed_steps}/{args.steps} steps on {args.track}"
+        )
+        print(f"max distance: {max_distance:.3f}m")
         print(f"runtime: {runtime_home}")
     return 0
 
