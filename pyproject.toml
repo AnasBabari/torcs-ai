@@ -121,7 +121,6 @@ ignore = ["E501", "F401", "E402", "UP031"]
 known-first-party = ["torcs_ai"]
 
 [tool.mypy]
-python_version = "3.11"
 explicit_package_bases = true
 exclude = [
     "^gym_torcs\\.py$",
